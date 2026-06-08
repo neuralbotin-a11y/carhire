@@ -4,14 +4,6 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-const LOCATIONS = [
-  "Panaji",
-  "Calangute",
-  "Margao",
-  "Vasco",
-  "Airport Dabolim",
-] as const;
-
 const NAVY = "#1a1f5e";
 const WHITE = "#ffffff";
 const OFFWHITE = "#f4f6fb";
@@ -37,16 +29,6 @@ const fieldStyle: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   borderRadius: "10px",
   outline: "none",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...fieldStyle,
-  cursor: "pointer",
-  appearance: "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1f5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 0.875rem center",
-  paddingRight: "2.25rem",
 };
 
 const cardShadow: React.CSSProperties = {
@@ -76,26 +58,13 @@ function getDays(pickup: string, returnDate: string) {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function resolveDropLocation(
-  dropLocation: string | null,
-  pickupLocation: string | null
-) {
-  if (dropLocation && LOCATIONS.includes(dropLocation as (typeof LOCATIONS)[number])) {
-    return dropLocation;
-  }
-  if (pickupLocation && LOCATIONS.includes(pickupLocation as (typeof LOCATIONS)[number])) {
-    return pickupLocation;
-  }
-  return LOCATIONS[0];
-}
-
 function CarsPageContent() {
   const searchParams = useSearchParams();
 
   const location = searchParams.get("location") ?? "";
+  const dropLocation = searchParams.get("dropLocation") ?? "";
   const pickup = searchParams.get("pickup") ?? "";
   const returnDate = searchParams.get("returnDate") ?? "";
-  const dropLocationParam = searchParams.get("dropLocation");
 
   const days = useMemo(() => getDays(pickup, returnDate), [pickup, returnDate]);
   const totalPrice = days * PRICE_PER_DAY;
@@ -104,9 +73,6 @@ function CarsPageContent() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [dropoffLocation, setDropoffLocation] = useState(() =>
-    resolveDropLocation(dropLocationParam, location)
-  );
   const [selectHover, setSelectHover] = useState(false);
   const [submitHover, setSubmitHover] = useState(false);
 
@@ -136,6 +102,7 @@ function CarsPageContent() {
       >
         {[
           { label: "Pickup Location", value: location || "—" },
+          { label: "Drop-off Location", value: dropLocation || "—" },
           { label: "Pickup", value: formatDatetime(pickup) },
           { label: "Return", value: formatDatetime(returnDate) },
           {
@@ -354,24 +321,6 @@ function CarsPageContent() {
                   onChange={(e) => setEmail(e.target.value)}
                   style={fieldStyle}
                 />
-              </div>
-
-              <div>
-                <label htmlFor="dropoff" style={labelStyle}>
-                  Drop-off Location
-                </label>
-                <select
-                  id="dropoff"
-                  value={dropoffLocation}
-                  onChange={(e) => setDropoffLocation(e.target.value)}
-                  style={selectStyle}
-                >
-                  {LOCATIONS.map((loc) => (
-                    <option key={loc} value={loc}>
-                      {loc}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
 
