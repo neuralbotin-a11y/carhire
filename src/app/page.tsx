@@ -39,13 +39,30 @@ const fieldStyle: React.CSSProperties = {
   outline: "none",
 };
 
+const selectStyle: React.CSSProperties = {
+  ...fieldStyle,
+  cursor: "pointer",
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1f5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 0.875rem center",
+  paddingRight: "2.25rem",
+};
+
+function toDatetimeLocal(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function Home() {
   const [location, setLocation] = useState<string>(LOCATIONS[0]);
   const [pickupDate, setPickupDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
+  const [differentDropoff, setDifferentDropoff] = useState(false);
+  const [dropoffLocation, setDropoffLocation] = useState<string>(LOCATIONS[0]);
   const [searchHover, setSearchHover] = useState(false);
 
-  const today = new Date().toISOString().split("T")[0];
+  const now = toDatetimeLocal(new Date());
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -148,15 +165,7 @@ export default function Home() {
                 id="location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                style={{
-                  ...fieldStyle,
-                  cursor: "pointer",
-                  appearance: "none",
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1f5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 0.875rem center",
-                  paddingRight: "2.25rem",
-                }}
+                style={selectStyle}
               >
                 {LOCATIONS.map((loc) => (
                   <option key={loc} value={loc}>
@@ -172,9 +181,9 @@ export default function Home() {
               </label>
               <input
                 id="pickup-date"
-                type="date"
+                type="datetime-local"
                 value={pickupDate}
-                min={today}
+                min={now}
                 onChange={(e) => setPickupDate(e.target.value)}
                 style={fieldStyle}
               />
@@ -186,9 +195,9 @@ export default function Home() {
               </label>
               <input
                 id="return-date"
-                type="date"
+                type="datetime-local"
                 value={returnDate}
-                min={pickupDate || today}
+                min={pickupDate || now}
                 onChange={(e) => setReturnDate(e.target.value)}
                 style={fieldStyle}
               />
@@ -219,6 +228,49 @@ export default function Home() {
               </button>
             </div>
           </div>
+
+          <label
+            htmlFor="different-dropoff"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              marginTop: "1rem",
+              fontSize: "0.875rem",
+              fontWeight: 500,
+              color: NAVY,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              id="different-dropoff"
+              type="checkbox"
+              checked={differentDropoff}
+              onChange={(e) => setDifferentDropoff(e.target.checked)}
+              style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: NAVY }}
+            />
+            Different drop-off location?
+          </label>
+
+          {differentDropoff && (
+            <div style={{ marginTop: "1rem", maxWidth: "280px" }}>
+              <label htmlFor="dropoff-location" style={labelStyle}>
+                Drop-off Location
+              </label>
+              <select
+                id="dropoff-location"
+                value={dropoffLocation}
+                onChange={(e) => setDropoffLocation(e.target.value)}
+                style={selectStyle}
+              >
+                {LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </form>
 
         <p
