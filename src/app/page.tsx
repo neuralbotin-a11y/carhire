@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const LOCATIONS = [
@@ -55,6 +56,7 @@ function toDatetimeLocal(date: Date) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [location, setLocation] = useState<string>(LOCATIONS[0]);
   const [pickupDate, setPickupDate] = useState("");
   const [returnDate, setReturnDate] = useState("");
@@ -66,6 +68,22 @@ export default function Home() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+
+    const dropLocation = differentDropoff ? dropoffLocation : location;
+
+    if (!location || !pickupDate || !returnDate) {
+      alert("Please fill in all fields before searching.");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      location,
+      pickup: pickupDate,
+      returnDate,
+      dropLocation,
+    });
+
+    router.push(`/cars?${params.toString()}`);
   }
 
   return (
