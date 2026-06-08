@@ -11,14 +11,13 @@ export default function Navbar() {
       <div style={{maxWidth:"1152px", margin:"0 auto", padding:"1rem 1.5rem", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
 
         {/* Logo */}
-        <Link href="/" style={{textDecoration:"none", display:"flex", flexDirection:"column", lineHeight:1}}>
-          <span style={{fontFamily:"Outfit,sans-serif", color:"#1a1f5e", fontSize:"1.5rem", fontWeight:800, letterSpacing:"-0.02em"}}>
-            Car<span style={{color:"#2d3494"}}>Hire</span>
-          </span>
-          <span style={{color:"#6b7280", fontSize:"0.6rem", letterSpacing:"0.15em", fontWeight:500}}>
-            · SELF DRIVE CARS ·
-          </span>
-      </Link>
+        <Link href="/" style={{textDecoration:"none", display:"flex", alignItems:"center"}}>
+        <img 
+             src="/logo.svg" 
+             alt="SmartWheels" 
+            style={{height:"52px", width:"auto"}}
+         />
+         </Link>
 
         {/* Desktop Links — hidden on mobile */}
         <div style={{display:"flex", alignItems:"center", gap:"2rem", fontSize:"0.875rem", fontWeight:500}}>

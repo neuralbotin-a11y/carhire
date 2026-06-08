@@ -5,8 +5,11 @@ import "./globals.css";
 import Navbar from "@/components/ui/Navbar";
 
 export const metadata: Metadata = {
-  title: "CarHire Goa — Self Drive Car Rentals",
+  title: "SmartWheels — Self Drive Car Rentals in Goa",
   description: "Book self-drive rental cars in Goa. Simple, affordable, no driver needed.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
