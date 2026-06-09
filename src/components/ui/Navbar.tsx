@@ -29,10 +29,10 @@ export default function Navbar() {
 
         {/* Book Now */}
         <Link
-          href="/booking"
-          style={{backgroundColor:"#1a1f5e", color:"#ffffff", padding:"0.6rem 1.4rem", borderRadius:"999px", fontSize:"0.875rem", fontWeight:600, textDecoration:"none", whiteSpace:"nowrap"}}
-        >
-          Book Now
+            href="/login"
+            style={{backgroundColor:"#1a1f5e", color:"#ffffff", padding:"0.6rem 1.4rem", borderRadius:"999px", fontSize:"0.875rem", fontWeight:600, textDecoration:"none", whiteSpace:"nowrap"}}
+          >
+            Login / Sign Up
         </Link>
       </div>
     </nav>
