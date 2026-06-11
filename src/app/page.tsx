@@ -40,8 +40,6 @@ const fieldStyle: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   borderRadius: "10px",
   outline: "none",
-  opacity: 1,
-  WebkitTextFillColor: NAVY,
 };
 
 const selectStyle: React.CSSProperties = {
