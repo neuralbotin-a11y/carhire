@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const LOCATIONS = [
   "Panaji",
@@ -63,6 +63,17 @@ export default function Home() {
   const [differentDropoff, setDifferentDropoff] = useState(false);
   const [dropoffLocation, setDropoffLocation] = useState<string>(LOCATIONS[0]);
   const [searchHover, setSearchHover] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function checkMobile() {
+      setIsMobile(window.innerWidth < 768);
+    }
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const now = toDatetimeLocal(new Date());
 
@@ -170,12 +181,19 @@ export default function Home() {
           <div
             style={{
               display: "flex",
-              flexWrap: "wrap",
+              flexDirection: isMobile ? "column" : "row",
+              flexWrap: isMobile ? "nowrap" : "wrap",
               gap: "1rem",
-              alignItems: "flex-end",
+              alignItems: isMobile ? "stretch" : "flex-end",
             }}
           >
-            <div style={{ flex: "1 1 180px", minWidth: "140px" }}>
+            <div
+              style={{
+                flex: isMobile ? "none" : "1 1 180px",
+                minWidth: isMobile ? "auto" : "140px",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <label htmlFor="location" style={labelStyle}>
                 Location
               </label>
@@ -193,7 +211,13 @@ export default function Home() {
               </select>
             </div>
 
-            <div style={{ flex: "1 1 160px", minWidth: "140px" }}>
+            <div
+              style={{
+                flex: isMobile ? "none" : "1 1 160px",
+                minWidth: isMobile ? "auto" : "140px",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <label htmlFor="pickup-date" style={labelStyle}>
                 Pickup Date
               </label>
@@ -207,7 +231,13 @@ export default function Home() {
               />
             </div>
 
-            <div style={{ flex: "1 1 160px", minWidth: "140px" }}>
+            <div
+              style={{
+                flex: isMobile ? "none" : "1 1 160px",
+                minWidth: isMobile ? "auto" : "140px",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <label htmlFor="return-date" style={labelStyle}>
                 Return Date
               </label>
@@ -221,7 +251,13 @@ export default function Home() {
               />
             </div>
 
-            <div style={{ flex: "0 0 auto", minWidth: "120px" }}>
+            <div
+              style={{
+                flex: isMobile ? "none" : "0 0 auto",
+                minWidth: isMobile ? "auto" : "120px",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <button
                 type="submit"
                 onMouseEnter={() => setSearchHover(true)}
@@ -271,7 +307,13 @@ export default function Home() {
           </label>
 
           {differentDropoff && (
-            <div style={{ marginTop: "1rem", maxWidth: "280px" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                maxWidth: isMobile ? "100%" : "280px",
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <label htmlFor="dropoff-location" style={labelStyle}>
                 Drop-off Location
               </label>
