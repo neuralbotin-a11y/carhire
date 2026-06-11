@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 
 const NAVY = "#1a1f5e";
+const NAVY_LIGHT = "#2d3494";
 const WHITE = "#ffffff";
 const OFFWHITE = "#f4f6fb";
 
@@ -21,9 +22,26 @@ type Booking = {
   pickupDate: string;
   returnDate: string;
   duration: string;
+  carName: string;
   totalPrice: number;
   status: BookingStatus;
 };
+
+type DateQuickFilter =
+  | "all"
+  | "today"
+  | "thisWeek"
+  | "thisMonth"
+  | "nextMonth"
+  | "custom";
+
+type StatusFilter =
+  | "All"
+  | "Pending"
+  | "Confirmed"
+  | "Active"
+  | "Completed"
+  | "Cancelled";
 
 type BookingRow = Booking & { notes: string };
 
@@ -57,6 +75,7 @@ const SAMPLE_BOOKINGS: Booking[] = [
     pickupDate: "12 Jun 2026, 10:00 AM",
     returnDate: "15 Jun 2026, 10:00 AM",
     duration: "3 days",
+    carName: "Maruti Baleno",
     totalPrice: 4500,
     status: "Pending",
   },
@@ -70,10 +89,142 @@ const SAMPLE_BOOKINGS: Booking[] = [
     pickupDate: "18 Jun 2026, 2:00 PM",
     returnDate: "20 Jun 2026, 2:00 PM",
     duration: "2 days",
+    carName: "Maruti Baleno",
     totalPrice: 3000,
     status: "Confirmed",
   },
 ];
+
+const DATE_FILTER_OPTIONS: { key: DateQuickFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "today", label: "Today" },
+  { key: "thisWeek", label: "This Week" },
+  { key: "thisMonth", label: "This Month" },
+  { key: "nextMonth", label: "Next Month" },
+  { key: "custom", label: "Custom" },
+];
+
+const STATUS_FILTER_OPTIONS: StatusFilter[] = [
+  "All",
+  "Pending",
+  "Confirmed",
+  "Active",
+  "Completed",
+  "Cancelled",
+];
+
+const STATUS_FILTER_ACTIVE_STYLES: Record<
+  StatusFilter,
+  React.CSSProperties
+> = {
+  All: { backgroundColor: NAVY, color: WHITE, border: `1px solid ${NAVY}` },
+  Pending: {
+    backgroundColor: "#fef9c3",
+    color: "#854d0e",
+    border: "1px solid #fde047",
+  },
+  Confirmed: {
+    backgroundColor: "#dcfce7",
+    color: "#166534",
+    border: "1px solid #86efac",
+  },
+  Active: {
+    backgroundColor: "#dbeafe",
+    color: "#1e40af",
+    border: "1px solid #93c5fd",
+  },
+  Completed: {
+    backgroundColor: "#f3f4f6",
+    color: "#374151",
+    border: "1px solid #d1d5db",
+  },
+  Cancelled: {
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
+    border: "1px solid #fca5a5",
+  },
+};
+
+const tripLabelStyle: React.CSSProperties = {
+  fontSize: "0.65rem",
+  fontWeight: 600,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#9ca3af",
+  marginBottom: "0.25rem",
+};
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function parseBookingDate(dateStr: string): Date | null {
+  const datePart = dateStr.split(",")[0]?.trim();
+  if (!datePart) return null;
+  const parsed = new Date(datePart);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getDateRange(
+  filter: DateQuickFilter,
+  customFrom: string,
+  customTo: string
+): { start: Date | null; end: Date | null } {
+  const now = new Date();
+  const today = startOfDay(now);
+
+  switch (filter) {
+    case "all":
+      return { start: null, end: null };
+    case "today":
+      return { start: today, end: endOfDay(now) };
+    case "thisWeek": {
+      const day = now.getDay();
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      const start = new Date(today);
+      start.setDate(start.getDate() + mondayOffset);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      return { start, end: endOfDay(end) };
+    }
+    case "thisMonth": {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start, end: endOfDay(end) };
+    }
+    case "nextMonth": {
+      const start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+      return { start, end: endOfDay(end) };
+    }
+    case "custom": {
+      const start = customFrom ? startOfDay(new Date(customFrom)) : null;
+      const end = customTo ? endOfDay(new Date(customTo)) : null;
+      return { start, end };
+    }
+  }
+}
+
+function isPickupInRange(
+  pickupDateStr: string,
+  start: Date | null,
+  end: Date | null
+): boolean {
+  if (!start && !end) return true;
+  const pickup = parseBookingDate(pickupDateStr);
+  if (!pickup) return false;
+  if (start && pickup < start) return false;
+  if (end && pickup > end) return false;
+  return true;
+}
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -407,23 +558,74 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [changeLogs, setChangeLogs] = useState<ChangeLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusModal, setStatusModal] = useState<StatusModalState | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateQuickFilter>("all");
+  const [statusFilters, setStatusFilters] = useState<StatusFilter[]>(["All"]);
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return bookings;
+    const { start, end } = getDateRange(dateFilter, customDateFrom, customDateTo);
+    const statusFilterActive =
+      statusFilters.length > 0 && !statusFilters.includes("All");
+
     return bookings.filter((b) => {
-      const haystack = [
-        b.name,
-        b.phone,
-        b.email,
-        b.pickupLocation,
-        b.dropoffLocation,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
+      if (q) {
+        const haystack = [
+          b.name,
+          b.phone,
+          b.email,
+          b.pickupLocation,
+          b.dropoffLocation,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
+      if (dateFilter !== "all" && !isPickupInRange(b.pickupDate, start, end)) {
+        return false;
+      }
+
+      if (
+        statusFilterActive &&
+        !statusFilters.includes(b.status as StatusFilter)
+      ) {
+        return false;
+      }
+
+      return true;
     });
-  }, [bookings, searchQuery]);
+  }, [
+    bookings,
+    searchQuery,
+    dateFilter,
+    customDateFrom,
+    customDateTo,
+    statusFilters,
+  ]);
+
+  function handleStatusFilterClick(status: StatusFilter) {
+    if (status === "All") {
+      setStatusFilters(["All"]);
+      return;
+    }
+
+    setStatusFilters((prev) => {
+      const withoutAll = prev.filter((s) => s !== "All");
+      const isSelected = withoutAll.includes(status);
+      const next = isSelected
+        ? withoutAll.filter((s) => s !== status)
+        : [...withoutAll, status];
+      return next.length === 0 ? ["All"] : next;
+    });
+  }
+
+  function handleClearCustomDates() {
+    setCustomDateFrom("");
+    setCustomDateTo("");
+    setDateFilter("all");
+  }
 
   function handleStatusSelect(id: string, newStatus: BookingStatus) {
     const booking = bookings.find((b) => b.id === id);
@@ -564,9 +766,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               Bookings
             </h2>
             <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-              {filteredBookings.length} booking
-              {filteredBookings.length === 1 ? "" : "s"} found
-              {searchQuery.trim() ? ` (filtered from ${bookings.length})` : ""}
+              {filteredBookings.length} of {bookings.length} booking
+              {bookings.length === 1 ? "" : "s"}
             </p>
           </div>
         </div>
@@ -583,6 +784,160 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             placeholder="Search by name, phone, email, or location…"
             style={fieldStyle}
           />
+        </div>
+
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "860px",
+            margin: "0 auto 1rem",
+            backgroundColor: WHITE,
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 4px 16px rgba(26, 31, 94, 0.06)",
+            padding: "1.25rem 1.5rem",
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Row 1 — Date quick filters */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              marginBottom: "1rem",
+            }}
+          >
+            {DATE_FILTER_OPTIONS.map((option) => {
+              const isActive = dateFilter === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setDateFilter(option.key)}
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    backgroundColor: isActive ? NAVY : WHITE,
+                    color: isActive ? WHITE : NAVY,
+                    border: `1px solid ${NAVY}`,
+                    transition: "background-color 0.15s ease, color 0.15s ease",
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Row 2 — Status filters */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              marginBottom: dateFilter === "custom" ? "1rem" : 0,
+            }}
+          >
+            {STATUS_FILTER_OPTIONS.map((status) => {
+              const isActive = statusFilters.includes(status);
+              const activeStyle = isActive
+                ? STATUS_FILTER_ACTIVE_STYLES[status]
+                : {
+                    backgroundColor: WHITE,
+                    color: NAVY,
+                    border: `1px solid ${NAVY}`,
+                  };
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => handleStatusFilterClick(status)}
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    ...activeStyle,
+                    transition: "background-color 0.15s ease, color 0.15s ease",
+                  }}
+                >
+                  {status}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Row 3 — Custom date range */}
+          {dateFilter === "custom" && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "flex-end",
+                gap: "1rem",
+                paddingTop: "1rem",
+                borderTop: "1px solid #e2e8f0",
+              }}
+            >
+              <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                <label htmlFor="custom-date-from" style={labelStyle}>
+                  From
+                </label>
+                <input
+                  id="custom-date-from"
+                  type="date"
+                  value={customDateFrom}
+                  onChange={(e) => setCustomDateFrom(e.target.value)}
+                  style={{
+                    ...fieldStyle,
+                    boxSizing: "border-box",
+                    maxWidth: "100%",
+                  }}
+                />
+              </div>
+              <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                <label htmlFor="custom-date-to" style={labelStyle}>
+                  To
+                </label>
+                <input
+                  id="custom-date-to"
+                  type="date"
+                  value={customDateTo}
+                  onChange={(e) => setCustomDateTo(e.target.value)}
+                  style={{
+                    ...fieldStyle,
+                    boxSizing: "border-box",
+                    maxWidth: "100%",
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleClearCustomDates}
+                style={{
+                  flex: "0 0 auto",
+                  padding: "0.65rem 1.25rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  color: NAVY,
+                  backgroundColor: WHITE,
+                  border: `1px solid ${NAVY}`,
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {filteredBookings.length === 0 ? (
@@ -602,7 +957,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               boxSizing: "border-box",
             }}
           >
-            No bookings match your search.
+            No bookings match your filters.
           </div>
         ) : (
           <div
@@ -709,18 +1064,53 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   <span>{booking.email}</span>
                 </div>
 
-                {/* Third row: route + dates + duration */}
-                <p
+                {/* Third row: structured trip details */}
+                <div
                   style={{
-                    margin: "0 0 0.75rem",
-                    fontSize: "0.875rem",
-                    color: "#6b7280",
-                    lineHeight: 1.5,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "1rem",
+                    marginBottom: "0.75rem",
                   }}
                 >
-                  {booking.pickupLocation} → {booking.dropoffLocation} ·{" "}
-                  {booking.pickupDate} · {booking.returnDate} · {booking.duration}
-                </p>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                    <div style={tripLabelStyle}>Pickup</div>
+                    <div style={{ fontSize: "0.875rem", lineHeight: 1.4 }}>
+                      <span style={{ color: NAVY, fontWeight: 700 }}>
+                        {booking.pickupLocation}
+                      </span>
+                      <span style={{ color: "#6b7280" }}>
+                        {" "}
+                        · {booking.pickupDate}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                    <div style={tripLabelStyle}>Drop-off</div>
+                    <div style={{ fontSize: "0.875rem", lineHeight: 1.4 }}>
+                      <span style={{ color: NAVY, fontWeight: 700 }}>
+                        {booking.dropoffLocation}
+                      </span>
+                      <span style={{ color: "#6b7280" }}>
+                        {" "}
+                        · {booking.returnDate}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                    <div style={tripLabelStyle}>Duration</div>
+                    <div
+                      style={{
+                        fontSize: "0.875rem",
+                        color: NAVY,
+                        fontWeight: 700,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {booking.duration}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Fourth row: car name + price */}
                 <div
@@ -740,7 +1130,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       color: "#374151",
                     }}
                   >
-                    —
+                    {booking.carName}
                   </span>
                   <span
                     style={{
