@@ -29,8 +29,10 @@ const labelStyle: React.CSSProperties = {
 };
 
 const fieldStyle: React.CSSProperties = {
+  display: "block",
   width: "100%",
   maxWidth: "100%",
+  minWidth: 0,
   boxSizing: "border-box",
   padding: "0.75rem 0.875rem",
   fontSize: "0.9375rem",
@@ -40,6 +42,19 @@ const fieldStyle: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   borderRadius: "10px",
   outline: "none",
+};
+
+const fieldGroupStyle: React.CSSProperties = {
+  flex: "1 1 140px",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const fieldGroupMobileStyle: React.CSSProperties = {
+  ...fieldGroupStyle,
+  flex: "1 1 auto",
+  width: "100%",
 };
 
 const selectStyle: React.CSSProperties = {
@@ -119,6 +134,8 @@ export default function Home() {
         style={{
           width: "100%",
           maxWidth: "960px",
+          minWidth: 0,
+          boxSizing: "border-box",
           textAlign: "center",
         }}
       >
@@ -173,6 +190,10 @@ export default function Home() {
         <form
           onSubmit={handleSearch}
           style={{
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
             backgroundColor: WHITE,
             borderRadius: "16px",
             padding: "1.75rem 1.5rem",
@@ -187,15 +208,12 @@ export default function Home() {
               flexWrap: isMobile ? "nowrap" : "wrap",
               gap: "1rem",
               alignItems: isMobile ? "stretch" : "flex-end",
+              width: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
             }}
           >
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 180px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={isMobile ? fieldGroupMobileStyle : fieldGroupStyle}>
               <label htmlFor="location" style={labelStyle}>
                 Location
               </label>
@@ -213,13 +231,7 @@ export default function Home() {
               </select>
             </div>
 
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 160px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={isMobile ? fieldGroupMobileStyle : fieldGroupStyle}>
               <label htmlFor="pickup-date" style={labelStyle}>
                 Pickup Date
               </label>
@@ -233,13 +245,7 @@ export default function Home() {
               />
             </div>
 
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 160px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={isMobile ? fieldGroupMobileStyle : fieldGroupStyle}>
               <label htmlFor="return-date" style={labelStyle}>
                 Return Date
               </label>
@@ -254,11 +260,11 @@ export default function Home() {
             </div>
 
             <div
-              style={{
-                flex: isMobile ? "none" : "0 0 auto",
-                minWidth: isMobile ? "auto" : "120px",
-                width: isMobile ? "100%" : "auto",
-              }}
+              style={
+                isMobile
+                  ? fieldGroupMobileStyle
+                  : { ...fieldGroupStyle, flex: "0 0 auto" }
+              }
             >
               <button
                 type="submit"
@@ -312,8 +318,10 @@ export default function Home() {
             <div
               style={{
                 marginTop: "1rem",
+                minWidth: 0,
                 maxWidth: isMobile ? "100%" : "280px",
-                width: isMobile ? "100%" : "auto",
+                width: "100%",
+                boxSizing: "border-box",
               }}
             >
               <label htmlFor="dropoff-location" style={labelStyle}>
