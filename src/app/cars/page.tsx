@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import { bookingService } from "@/services/booking.service";
 
 const NAVY = "#1a1f5e";
 const WHITE = "#ffffff";
@@ -73,11 +74,102 @@ function CarsPageContent() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [specialRequests, setSpecialRequests] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [selectHover, setSelectHover] = useState(false);
   const [submitHover, setSubmitHover] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  const firstName = fullName.trim().split(/\s+/)[0] || "there";
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitting(true);
+    setSubmitError("");
+
+    const { error } = await bookingService.create({
+      customer_name: fullName,
+      customer_phone: phone,
+      customer_email: email,
+      customer_address: address,
+      pickup_location: location,
+      dropoff_location: dropLocation,
+      different_dropoff: !!dropLocation && dropLocation !== location,
+      pickup_datetime: pickup,
+      return_datetime: returnDate,
+      special_requests: specialRequests,
+    });
+
+    if (error) {
+      setSubmitError(error);
+    } else {
+      setSubmitted(true);
+    }
+
+    setSubmitting(false);
+  }
+
+  if (submitted) {
+    return (
+      <div
+        style={{
+          maxWidth: "960px",
+          margin: "0 auto",
+          padding: "2rem 1.5rem 3rem",
+        }}
+      >
+        <div
+          style={{
+            ...cardShadow,
+            backgroundColor: WHITE,
+            borderRadius: "16px",
+            padding: "3rem 2rem",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              borderRadius: "50%",
+              backgroundColor: "#dcfce7",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.5rem",
+            }}
+          >
+            <span style={{ fontSize: "1.75rem", color: "#16a34a" }}>✓</span>
+          </div>
+          <h1
+            style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: NAVY,
+              marginBottom: "0.75rem",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Booking Request Received!
+          </h1>
+          <p
+            style={{
+              fontSize: "1rem",
+              color: "#6b7280",
+              lineHeight: 1.6,
+              maxWidth: "420px",
+              margin: "0 auto",
+            }}
+          >
+            Thanks {firstName}! We&apos;ll confirm your booking via WhatsApp or email within a few
+            hours.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -322,6 +414,32 @@ function CarsPageContent() {
                   style={fieldStyle}
                 />
               </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label htmlFor="address" style={labelStyle}>
+                  Address in Goa (where you&apos;re staying)
+                </label>
+                <input
+                  id="address"
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label htmlFor="special-requests" style={labelStyle}>
+                  Special Requests (optional)
+                </label>
+                <textarea
+                  id="special-requests"
+                  rows={2}
+                  value={specialRequests}
+                  onChange={(e) => setSpecialRequests(e.target.value)}
+                  style={{ ...fieldStyle, resize: "vertical" }}
+                />
+              </div>
             </div>
 
             <div
@@ -355,27 +473,57 @@ function CarsPageContent() {
                 </p>
               </div>
 
-              <button
-                type="submit"
-                onMouseEnter={() => setSubmitHover(true)}
-                onMouseLeave={() => setSubmitHover(false)}
-                style={{
-                  padding: "0.8rem 2rem",
-                  fontSize: "0.9375rem",
-                  fontWeight: 600,
-                  fontFamily: "'DM Sans', sans-serif",
-                  color: WHITE,
-                  backgroundColor: submitHover ? "#2d3494" : NAVY,
-                  border: "none",
-                  borderRadius: "10px",
-                  cursor: "pointer",
-                  transition: "background-color 0.2s ease",
-                  boxShadow: "0 4px 14px rgba(26, 31, 94, 0.35)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Submit Booking Request
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.75rem" }}>
+                {submitError && (
+                  <div
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      backgroundColor: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: "10px",
+                      color: "#dc2626",
+                      fontSize: "0.875rem",
+                    }}
+                  >
+                    {submitError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  onMouseEnter={() => setSubmitHover(true)}
+                  onMouseLeave={() => setSubmitHover(false)}
+                  style={{
+                    padding: "0.8rem 2rem",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    color: WHITE,
+                    backgroundColor: submitting ? "#6b7280" : submitHover ? "#2d3494" : NAVY,
+                    border: "none",
+                    borderRadius: "10px",
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    transition: "background-color 0.2s ease",
+                    boxShadow: "0 4px 14px rgba(26, 31, 94, 0.35)",
+                    whiteSpace: "nowrap",
+                    opacity: submitting ? 0.8 : 1,
+                  }}
+                >
+                  {submitting ? "Submitting…" : "Submit Booking Request"}
+                </button>
+
+                <p
+                  style={{
+                    fontSize: "0.8125rem",
+                    color: "#16a34a",
+                    textAlign: "right",
+                  }}
+                >
+                  ✓ No payment now — we&apos;ll confirm via WhatsApp or email before any charge
+                </p>
+              </div>
             </div>
           </form>
         )}
