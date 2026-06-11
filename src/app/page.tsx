@@ -30,6 +30,8 @@ const labelStyle: React.CSSProperties = {
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
   padding: "0.75rem 0.875rem",
   fontSize: "0.9375rem",
   fontFamily: "'DM Sans', sans-serif",

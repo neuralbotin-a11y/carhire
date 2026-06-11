@@ -408,21 +408,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusModal, setStatusModal] = useState<StatusModalState | null>(null);
 
-  const columns: { key: string; label: string; minWidth: string }[] = [
-    { key: "name", label: "Name", minWidth: "130px" },
-    { key: "phone", label: "Phone", minWidth: "150px" },
-    { key: "email", label: "Email", minWidth: "200px" },
-    { key: "pickupLocation", label: "Pickup Location", minWidth: "150px" },
-    { key: "dropoffLocation", label: "Drop-off Location", minWidth: "150px" },
-    { key: "pickupDate", label: "Pickup Date", minWidth: "180px" },
-    { key: "returnDate", label: "Return Date", minWidth: "180px" },
-    { key: "duration", label: "Duration", minWidth: "100px" },
-    { key: "totalPrice", label: "Total Price", minWidth: "120px" },
-    { key: "status", label: "Status", minWidth: "140px" },
-    { key: "notes", label: "Notes", minWidth: "200px" },
-    { key: "whatsapp", label: "WhatsApp", minWidth: "90px" },
-  ];
-
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return bookings;
@@ -482,12 +467,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       prev.map((b) => (b.id === id ? { ...b, notes: value } : b))
     );
   }
-
-  const cellStyle = (minWidth: string): React.CSSProperties => ({
-    padding: "0.875rem 1rem",
-    minWidth,
-    whiteSpace: "nowrap",
-  });
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: OFFWHITE }}>
@@ -606,192 +585,236 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           />
         </div>
 
-        <div
-          style={{
-            width: "100%",
-            backgroundColor: WHITE,
-            borderRadius: "12px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 4px 16px rgba(26, 31, 94, 0.06)",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ width: "100%", overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "0.875rem",
-              }}
-            >
-              <thead>
-                <tr style={{ backgroundColor: NAVY }}>
-                  {columns.map((col) => (
-                    <th
-                      key={col.key}
-                      style={{
-                        padding: "0.875rem 1rem",
-                        textAlign: "left",
-                        fontWeight: 600,
-                        color: WHITE,
-                        whiteSpace: "nowrap",
-                        fontSize: "0.8125rem",
-                        letterSpacing: "0.02em",
-                        minWidth: col.minWidth,
-                      }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBookings.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      style={{
-                        padding: "2rem 1rem",
-                        textAlign: "center",
-                        color: "#9ca3af",
-                      }}
-                    >
-                      No bookings match your search.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredBookings.map((booking, index) => (
-                    <tr
-                      key={booking.id}
-                      style={{
-                        borderBottom:
-                          index < filteredBookings.length - 1
-                            ? "1px solid #e2e8f0"
-                            : "none",
-                        backgroundColor: WHITE,
-                      }}
-                    >
-                      <td
-                        style={{
-                          ...cellStyle("130px"),
-                          color: NAVY,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {booking.name}
-                      </td>
-                      <td style={{ ...cellStyle("150px"), color: "#374151" }}>
-                        {booking.phone}
-                      </td>
-                      <td style={{ ...cellStyle("200px"), color: "#374151" }}>
-                        {booking.email}
-                      </td>
-                      <td style={{ ...cellStyle("150px"), color: "#374151" }}>
-                        {booking.pickupLocation}
-                      </td>
-                      <td style={{ ...cellStyle("150px"), color: "#374151" }}>
-                        {booking.dropoffLocation}
-                      </td>
-                      <td style={{ ...cellStyle("180px"), color: "#374151" }}>
-                        {booking.pickupDate}
-                      </td>
-                      <td style={{ ...cellStyle("180px"), color: "#374151" }}>
-                        {booking.returnDate}
-                      </td>
-                      <td style={{ ...cellStyle("100px"), color: "#374151" }}>
-                        {booking.duration}
-                      </td>
-                      <td
-                        style={{
-                          ...cellStyle("120px"),
-                          color: NAVY,
-                          fontWeight: 600,
-                        }}
-                      >
-                        ₹{booking.totalPrice.toLocaleString("en-IN")}
-                      </td>
-                      <td style={{ padding: "0.75rem 1rem", minWidth: "140px" }}>
-                        <select
-                          value={booking.status}
-                          onChange={(e) =>
-                            handleStatusSelect(
-                              booking.id,
-                              e.target.value as BookingStatus
-                            )
-                          }
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            fontFamily: "'DM Sans', sans-serif",
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            outline: "none",
-                            ...STATUS_STYLES[booking.status],
-                          }}
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "0.75rem 1rem", minWidth: "200px" }}>
-                        <input
-                          type="text"
-                          value={booking.notes}
-                          onChange={(e) =>
-                            handleNoteChange(booking.id, e.target.value)
-                          }
-                          placeholder="e.g. Called customer"
-                          style={{
-                            width: "100%",
-                            minWidth: "180px",
-                            padding: "0.4rem 0.5rem",
-                            fontSize: "0.8125rem",
-                            fontFamily: "'DM Sans', sans-serif",
-                            color: NAVY,
-                            backgroundColor: OFFWHITE,
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "6px",
-                            outline: "none",
-                            boxSizing: "border-box",
-                          }}
-                        />
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.75rem 1rem",
-                          minWidth: "90px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          title="Send WhatsApp message"
-                          onClick={() =>
-                            alert("WhatsApp integration coming soon")
-                          }
-                          style={{
-                            padding: "0.4rem 0.6rem",
-                            fontSize: "1.125rem",
-                            lineHeight: 1,
-                            backgroundColor: OFFWHITE,
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          💬
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+        {filteredBookings.length === 0 ? (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "860px",
+              margin: "0 auto",
+              backgroundColor: WHITE,
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 16px rgba(26, 31, 94, 0.06)",
+              padding: "2rem 1.25rem",
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: "0.875rem",
+              boxSizing: "border-box",
+            }}
+          >
+            No bookings match your search.
           </div>
-        </div>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "860px",
+              margin: "0 auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+              boxSizing: "border-box",
+            }}
+          >
+            {filteredBookings.map((booking) => (
+              <article
+                key={booking.id}
+                style={{
+                  backgroundColor: WHITE,
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 16px rgba(26, 31, 94, 0.06)",
+                  padding: "1.25rem 1.5rem",
+                  boxSizing: "border-box",
+                }}
+              >
+                {/* Top row: name + status badge + WhatsApp */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    flexWrap: "wrap",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                      flex: "1 1 auto",
+                      minWidth: 0,
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: "1.125rem",
+                        fontWeight: 700,
+                        color: NAVY,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      {booking.name}
+                    </h3>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "999px",
+                        whiteSpace: "nowrap",
+                        ...STATUS_STYLES[booking.status],
+                      }}
+                    >
+                      {booking.status}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    title="Send WhatsApp message"
+                    onClick={() => alert("WhatsApp integration coming soon")}
+                    style={{
+                      flexShrink: 0,
+                      padding: "0.4rem 0.6rem",
+                      fontSize: "1.125rem",
+                      lineHeight: 1,
+                      backgroundColor: OFFWHITE,
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    💬
+                  </button>
+                </div>
+
+                {/* Second row: phone + email */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "1.25rem",
+                    marginBottom: "0.65rem",
+                    fontSize: "0.875rem",
+                    color: "#374151",
+                  }}
+                >
+                  <span>{booking.phone}</span>
+                  <span>{booking.email}</span>
+                </div>
+
+                {/* Third row: route + dates + duration */}
+                <p
+                  style={{
+                    margin: "0 0 0.75rem",
+                    fontSize: "0.875rem",
+                    color: "#6b7280",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {booking.pickupLocation} → {booking.dropoffLocation} ·{" "}
+                  {booking.pickupDate} · {booking.returnDate} · {booking.duration}
+                </p>
+
+                {/* Fourth row: car name + price */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    marginBottom: "1rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.9375rem",
+                      fontWeight: 500,
+                      color: "#374151",
+                    }}
+                  >
+                    —
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: NAVY,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ₹{booking.totalPrice.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                {/* Bottom row: status dropdown + admin note */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "1rem",
+                    flexWrap: "wrap",
+                    paddingTop: "1rem",
+                    borderTop: "1px solid #e2e8f0",
+                  }}
+                >
+                  <select
+                    value={booking.status}
+                    onChange={(e) =>
+                      handleStatusSelect(
+                        booking.id,
+                        e.target.value as BookingStatus
+                      )
+                    }
+                    style={{
+                      flex: "0 0 auto",
+                      minWidth: "130px",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      fontFamily: "'DM Sans', sans-serif",
+                      padding: "0.35rem 0.5rem",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      outline: "none",
+                      ...STATUS_STYLES[booking.status],
+                    }}
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={booking.notes}
+                    onChange={(e) => handleNoteChange(booking.id, e.target.value)}
+                    placeholder="e.g. Called customer"
+                    style={{
+                      flex: "1 1 200px",
+                      minWidth: "160px",
+                      padding: "0.4rem 0.5rem",
+                      fontSize: "0.8125rem",
+                      fontFamily: "'DM Sans', sans-serif",
+                      color: NAVY,
+                      backgroundColor: OFFWHITE,
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "6px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
 
         <div style={{ marginTop: "1.5rem" }}>
           <h3
