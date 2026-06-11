@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { bookingService } from "@/services/booking.service";
+import type { BookingFull, BookingStatus as SupabaseBookingStatus } from "@/lib/types";
 
 const NAVY = "#1a1f5e";
 const NAVY_LIGHT = "#2d3494";
@@ -10,7 +12,12 @@ const OFFWHITE = "#f4f6fb";
 const ADMIN_EMAIL = "admin@smartwheels.in";
 const ADMIN_PASSWORD = "admin123";
 
-type BookingStatus = "Pending" | "Confirmed" | "Cancelled";
+type BookingStatus =
+  | "Pending"
+  | "Confirmed"
+  | "Active"
+  | "Completed"
+  | "Cancelled";
 
 type Booking = {
   id: string;
@@ -20,11 +27,13 @@ type Booking = {
   pickupLocation: string;
   dropoffLocation: string;
   pickupDate: string;
+  pickupDatetime: string;
   returnDate: string;
   duration: string;
   carName: string;
   totalPrice: number;
   status: BookingStatus;
+  adminNote: string;
 };
 
 type DateQuickFilter =
@@ -42,8 +51,6 @@ type StatusFilter =
   | "Active"
   | "Completed"
   | "Cancelled";
-
-type BookingRow = Booking & { notes: string };
 
 type ChangeLogEntry = {
   timestamp: Date;
@@ -64,36 +71,52 @@ type StatusModalState = {
   note: string;
 };
 
-const SAMPLE_BOOKINGS: Booking[] = [
-  {
-    id: "1",
-    name: "Rahul Sharma",
-    phone: "+91 98765 43210",
-    email: "rahul.sharma@gmail.com",
-    pickupLocation: "Panaji",
-    dropoffLocation: "Panaji",
-    pickupDate: "12 Jun 2026, 10:00 AM",
-    returnDate: "15 Jun 2026, 10:00 AM",
-    duration: "3 days",
-    carName: "Maruti Baleno",
-    totalPrice: 4500,
-    status: "Pending",
-  },
-  {
-    id: "2",
-    name: "Priya Fernandes",
-    phone: "+91 91234 56789",
-    email: "priya.f@outlook.com",
-    pickupLocation: "Airport (Dabolim)",
-    dropoffLocation: "Calangute",
-    pickupDate: "18 Jun 2026, 2:00 PM",
-    returnDate: "20 Jun 2026, 2:00 PM",
-    duration: "2 days",
-    carName: "Maruti Baleno",
-    totalPrice: 3000,
-    status: "Confirmed",
-  },
-];
+const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+};
+
+function formatBookingDatetime(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", DATE_TIME_FORMAT);
+}
+
+function mapSupabaseStatus(status: string): BookingStatus {
+  const labels: Record<string, BookingStatus> = {
+    pending: "Pending",
+    confirmed: "Confirmed",
+    active: "Active",
+    completed: "Completed",
+    cancelled: "Cancelled",
+  };
+  return labels[status] ?? "Pending";
+}
+
+function toSupabaseStatus(status: BookingStatus): SupabaseBookingStatus {
+  return status.toLowerCase() as SupabaseBookingStatus;
+}
+
+function mapBookingFull(row: BookingFull): Booking {
+  return {
+    id: row.id,
+    name: row.customer_name,
+    phone: row.customer_phone,
+    email: row.customer_email,
+    pickupLocation: row.pickup_location,
+    dropoffLocation: row.dropoff_location ?? row.pickup_location,
+    pickupDate: formatBookingDatetime(row.pickup_datetime),
+    pickupDatetime: row.pickup_datetime,
+    returnDate: formatBookingDatetime(row.return_datetime),
+    duration: `${row.duration_days} days`,
+    carName: row.car_name,
+    totalPrice: row.total_price,
+    status: mapSupabaseStatus(row.status),
+    adminNote: row.admin_note ?? "",
+  };
+}
 
 const DATE_FILTER_OPTIONS: { key: DateQuickFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -166,13 +189,6 @@ function endOfDay(date: Date): Date {
   return d;
 }
 
-function parseBookingDate(dateStr: string): Date | null {
-  const datePart = dateStr.split(",")[0]?.trim();
-  if (!datePart) return null;
-  const parsed = new Date(datePart);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function getDateRange(
   filter: DateQuickFilter,
   customFrom: string,
@@ -214,13 +230,13 @@ function getDateRange(
 }
 
 function isPickupInRange(
-  pickupDateStr: string,
+  pickupDatetime: string,
   start: Date | null,
   end: Date | null
 ): boolean {
   if (!start && !end) return true;
-  const pickup = parseBookingDate(pickupDateStr);
-  if (!pickup) return false;
+  const pickup = new Date(pickupDatetime);
+  if (Number.isNaN(pickup.getTime())) return false;
   if (start && pickup < start) return false;
   if (end && pickup > end) return false;
   return true;
@@ -258,6 +274,16 @@ const STATUS_STYLES: Record<BookingStatus, React.CSSProperties> = {
     backgroundColor: "#d1fae5",
     color: "#047857",
     border: "1px solid #6ee7b7",
+  },
+  Active: {
+    backgroundColor: "#dbeafe",
+    color: "#1e40af",
+    border: "1px solid #93c5fd",
+  },
+  Completed: {
+    backgroundColor: "#f3f4f6",
+    color: "#374151",
+    border: "1px solid #d1d5db",
   },
   Cancelled: {
     backgroundColor: "#fee2e2",
@@ -552,9 +578,10 @@ function StatusChangeModal({
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [logoutHover, setLogoutHover] = useState(false);
-  const [bookings, setBookings] = useState<BookingRow[]>(() =>
-    SAMPLE_BOOKINGS.map((b) => ({ ...b, notes: "" }))
-  );
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [updateError, setUpdateError] = useState("");
   const [changeLogs, setChangeLogs] = useState<ChangeLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusModal, setStatusModal] = useState<StatusModalState | null>(null);
@@ -562,6 +589,23 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [statusFilters, setStatusFilters] = useState<StatusFilter[]>(["All"]);
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
+
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    setFetchError("");
+    const { data, error } = await bookingService.getAll();
+    if (error) {
+      setFetchError(error);
+      setBookings([]);
+    } else {
+      setBookings((data ?? []).map(mapBookingFull));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -583,7 +627,10 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         if (!haystack.includes(q)) return false;
       }
 
-      if (dateFilter !== "all" && !isPickupInRange(b.pickupDate, start, end)) {
+      if (
+        dateFilter !== "all" &&
+        !isPickupInRange(b.pickupDatetime, start, end)
+      ) {
         return false;
       }
 
@@ -639,8 +686,21 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     });
   }
 
-  function handleStatusConfirm() {
+  async function handleStatusConfirm() {
     if (!statusModal || !statusModal.note.trim()) return;
+
+    setUpdateError("");
+    const { error } = await bookingService.updateStatus(
+      statusModal.bookingId,
+      toSupabaseStatus(statusModal.newStatus),
+      statusModal.note.trim(),
+      ADMIN_EMAIL
+    );
+
+    if (error) {
+      setUpdateError(error);
+      return;
+    }
 
     const logEntry: ChangeLogEntry = {
       timestamp: new Date(),
@@ -654,19 +714,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     };
 
     setChangeLogs((prev) => [logEntry, ...prev]);
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === statusModal.bookingId
-          ? { ...b, status: statusModal.newStatus }
-          : b
-      )
-    );
     setStatusModal(null);
+    await fetchBookings();
   }
 
   function handleNoteChange(id: string, value: string) {
     setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, notes: value } : b))
+      prev.map((b) => (b.id === id ? { ...b, adminNote: value } : b))
     );
   }
 
@@ -940,7 +994,62 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           )}
         </div>
 
-        {filteredBookings.length === 0 ? (
+        {fetchError && (
+          <p
+            style={{
+              maxWidth: "860px",
+              margin: "0 auto 1rem",
+              fontSize: "0.875rem",
+              color: "#b91c1c",
+              backgroundColor: "#fee2e2",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              padding: "0.75rem 1rem",
+              boxSizing: "border-box",
+            }}
+          >
+            {fetchError}
+          </p>
+        )}
+
+        {updateError && (
+          <p
+            style={{
+              maxWidth: "860px",
+              margin: "0 auto 1rem",
+              fontSize: "0.875rem",
+              color: "#b91c1c",
+              backgroundColor: "#fee2e2",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              padding: "0.75rem 1rem",
+              boxSizing: "border-box",
+            }}
+          >
+            {updateError}
+          </p>
+        )}
+
+        {loading ? (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "860px",
+              margin: "0 auto",
+              backgroundColor: WHITE,
+              borderRadius: "12px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 16px rgba(26, 31, 94, 0.06)",
+              padding: "2rem 1.25rem",
+              textAlign: "center",
+              color: "#6b7280",
+              fontSize: "0.875rem",
+              boxSizing: "border-box",
+            }}
+          >
+            Loading bookings…
+          </div>
+        ) : filteredBookings.length === 0 ? (
           <div
             style={{
               width: "100%",
@@ -1179,11 +1288,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   >
                     <option value="Pending">Pending</option>
                     <option value="Confirmed">Confirmed</option>
+                    <option value="Active">Active</option>
+                    <option value="Completed">Completed</option>
                     <option value="Cancelled">Cancelled</option>
                   </select>
                   <input
                     type="text"
-                    value={booking.notes}
+                    value={booking.adminNote}
                     onChange={(e) => handleNoteChange(booking.id, e.target.value)}
                     placeholder="e.g. Called customer"
                     style={{
