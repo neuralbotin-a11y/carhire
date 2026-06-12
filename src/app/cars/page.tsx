@@ -3,12 +3,19 @@
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import {
+  LOCATIONS,
+  calculatePrice,
+  validateBooking,
+  type PriceBreakdown,
+} from "@/lib/pricing";
 import { bookingService } from "@/services/booking.service";
 
 const NAVY = "#1a1f5e";
+const NAVY_LIGHT = "#2d3494";
 const WHITE = "#ffffff";
 const OFFWHITE = "#f4f6fb";
-const PRICE_PER_DAY = 1500;
+const BASE_RATE_PER_DAY = 1500;
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -32,60 +39,259 @@ const fieldStyle: React.CSSProperties = {
   outline: "none",
 };
 
+const selectStyle: React.CSSProperties = {
+  ...fieldStyle,
+  cursor: "pointer",
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231a1f5e' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 0.875rem center",
+  paddingRight: "2.25rem",
+};
+
+const datetimeFieldStyle: React.CSSProperties = {
+  ...fieldStyle,
+  display: "block",
+  minWidth: 0,
+  boxSizing: "border-box",
+  WebkitAppearance: "none",
+  appearance: "none",
+};
+
 const cardShadow: React.CSSProperties = {
   boxShadow: "0 8px 32px rgba(26, 31, 94, 0.1), 0 0 0 1px rgba(26, 31, 94, 0.04)",
 };
 
-function formatDatetime(value: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+const dividerStyle: React.CSSProperties = {
+  border: "none",
+  borderTop: "1px solid #e2e8f0",
+  margin: "0.75rem 0",
+};
+
+function resolveLocation(param: string): string {
+  if (LOCATIONS.includes(param)) return param;
+  return LOCATIONS[0];
 }
 
-function getDays(pickup: string, returnDate: string) {
-  if (!pickup || !returnDate) return 1;
-  const start = new Date(pickup);
-  const end = new Date(returnDate);
-  const diffMs = end.getTime() - start.getTime();
-  if (diffMs <= 0) return 1;
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+function toDatetimeLocal(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function isNightHour(datetime: Date): boolean {
+  const hour = datetime.getHours();
+  return hour >= 21 || hour < 7;
+}
+
+function getNightSurchargeNote(pickupDatetime: Date, returnDatetime: Date): string {
+  const notes: string[] = [];
+  if (isNightHour(pickupDatetime)) {
+    notes.push("Pickup after 9 PM");
+  }
+  if (isNightHour(returnDatetime)) {
+    notes.push("Drop-off before 7 AM");
+  }
+  return notes.join(" · ");
+}
+
+function formatRupee(amount: number) {
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+function PriceLine({
+  label,
+  amount,
+  note,
+  bold,
+}: {
+  label: string;
+  amount: number;
+  note?: string;
+  bold?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: "1rem",
+        fontSize: bold ? "0.9375rem" : "0.875rem",
+        fontWeight: bold ? 600 : 400,
+        color: NAVY,
+      }}
+    >
+      <div style={{ flex: 1 }}>
+        <span>{label}</span>
+        {note && (
+          <p
+            style={{
+              margin: "0.2rem 0 0",
+              fontSize: "0.75rem",
+              fontWeight: 400,
+              color: "#6b7280",
+              lineHeight: 1.4,
+            }}
+          >
+            {note}
+          </p>
+        )}
+      </div>
+      <span style={{ whiteSpace: "nowrap" }}>{formatRupee(amount)}</span>
+    </div>
+  );
+}
+
+function PriceBreakdownCard({
+  breakdown,
+  pickupDatetime,
+  returnDatetime,
+}: {
+  breakdown: PriceBreakdown;
+  pickupDatetime: Date;
+  returnDatetime: Date;
+}) {
+  return (
+    <div style={{ flex: "1 1 280px", minWidth: "240px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <PriceLine
+          label={`Base rate (₹${BASE_RATE_PER_DAY.toLocaleString("en-IN")} × ${breakdown.baseDays} days)`}
+          amount={breakdown.baseRate}
+        />
+        <PriceLine label="Pickup location charge" amount={breakdown.pickupLocationCharge} />
+        <PriceLine label="Drop-off location charge" amount={breakdown.dropoffLocationCharge} />
+        {breakdown.nightSurcharge > 0 && (
+          <PriceLine
+            label="Night surcharge"
+            amount={breakdown.nightSurcharge}
+            note={getNightSurchargeNote(pickupDatetime, returnDatetime)}
+          />
+        )}
+        <PriceLine label="Washing charge" amount={breakdown.washingCharge} />
+      </div>
+
+      <hr style={dividerStyle} />
+
+      <PriceLine label="Subtotal" amount={breakdown.subtotal} bold />
+
+      <div
+        style={{
+          marginTop: "0.75rem",
+          padding: "0.75rem 1rem",
+          backgroundColor: OFFWHITE,
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "1rem",
+            fontSize: "0.875rem",
+            color: "#6b7280",
+          }}
+        >
+          <span style={{ fontStyle: "italic" }}>Refundable deposit</span>
+          <span style={{ color: NAVY, fontWeight: 500 }}>{formatRupee(breakdown.securityDeposit)}</span>
+        </div>
+      </div>
+
+      <hr style={dividerStyle} />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: "1rem",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "1rem",
+            fontWeight: 700,
+            color: NAVY,
+          }}
+        >
+          Total payable
+        </span>
+        <span
+          style={{
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "1.75rem",
+            fontWeight: 700,
+            color: NAVY,
+          }}
+        >
+          {formatRupee(breakdown.totalPayable)}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function CarsPageContent() {
   const searchParams = useSearchParams();
 
-  const location = searchParams.get("location") ?? "";
-  const dropLocation = searchParams.get("dropLocation") ?? "";
-  const pickup = searchParams.get("pickup") ?? "";
-  const returnDate = searchParams.get("returnDate") ?? "";
+  const [pickupLocation, setPickupLocation] = useState(() =>
+    resolveLocation(searchParams.get("location") ?? "")
+  );
+  const [dropoffLocation, setDropoffLocation] = useState(() =>
+    resolveLocation(
+      searchParams.get("dropoff") ??
+        searchParams.get("dropLocation") ??
+        searchParams.get("location") ??
+        ""
+    )
+  );
+  const [pickup, setPickup] = useState(searchParams.get("pickup") ?? "");
+  const [returnDate, setReturnDate] = useState(
+    searchParams.get("return") ?? searchParams.get("returnDate") ?? ""
+  );
 
-  const days = useMemo(() => getDays(pickup, returnDate), [pickup, returnDate]);
-  const totalPrice = days * PRICE_PER_DAY;
+  const pickupDatetime = useMemo(() => new Date(pickup), [pickup]);
+  const returnDatetime = useMemo(() => new Date(returnDate), [returnDate]);
+
+  const hasValidDates =
+    !!pickup &&
+    !!returnDate &&
+    !Number.isNaN(pickupDatetime.getTime()) &&
+    !Number.isNaN(returnDatetime.getTime());
+
+  const validation = useMemo(() => {
+    if (!hasValidDates) {
+      return { valid: false, errors: [] as string[] };
+    }
+    return validateBooking(pickupDatetime, returnDatetime);
+  }, [hasValidDates, pickupDatetime, returnDatetime]);
+
+  const priceBreakdown = useMemo(() => {
+    if (!hasValidDates) return null;
+    return calculatePrice(pickupLocation, dropoffLocation, pickupDatetime, returnDatetime);
+  }, [hasValidDates, pickupLocation, dropoffLocation, pickupDatetime, returnDatetime]);
 
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [specialRequests, setSpecialRequests] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [selectHover, setSelectHover] = useState(false);
   const [submitHover, setSubmitHover] = useState(false);
 
+  const now = toDatetimeLocal(new Date());
   const firstName = fullName.trim().split(/\s+/)[0] || "there";
+  const durationDays = priceBreakdown?.baseDays ?? 0;
+  const submitDisabled = submitting || !validation.valid || !priceBreakdown;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitDisabled) return;
+
     setSubmitting(true);
     setSubmitError("");
 
@@ -93,13 +299,13 @@ function CarsPageContent() {
       customer_name: fullName,
       customer_phone: phone,
       customer_email: email,
-      customer_address: address,
-      pickup_location: location,
-      dropoff_location: dropLocation,
-      different_dropoff: !!dropLocation && dropLocation !== location,
+      customer_address: "",
+      pickup_location: pickupLocation,
+      dropoff_location: dropoffLocation,
+      different_dropoff: dropoffLocation !== pickupLocation,
       pickup_datetime: pickup,
       return_datetime: returnDate,
-      special_requests: specialRequests,
+      special_requests: "",
     });
 
     if (error) {
@@ -192,29 +398,102 @@ function CarsPageContent() {
           gap: "1.25rem 2rem",
         }}
       >
-        {[
-          { label: "Pickup Location", value: location || "—" },
-          { label: "Drop-off Location", value: dropLocation || "—" },
-          { label: "Pickup", value: formatDatetime(pickup) },
-          { label: "Return", value: formatDatetime(returnDate) },
-          {
-            label: "Duration",
-            value: `${days} day${days === 1 ? "" : "s"}`,
-          },
-        ].map((item) => (
-          <div key={item.label} style={{ minWidth: "140px" }}>
-            <p style={{ ...labelStyle, marginBottom: "0.35rem" }}>{item.label}</p>
-            <p
-              style={{
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                color: NAVY,
-              }}
-            >
-              {item.value}
-            </p>
+        <div style={{ minWidth: "180px", flex: "1 1 180px" }}>
+          <label htmlFor="summary-pickup-location" style={{ ...labelStyle, marginBottom: "0.35rem" }}>
+            Pickup Location
+          </label>
+          <select
+            id="summary-pickup-location"
+            value={pickupLocation}
+            onChange={(e) => setPickupLocation(e.target.value)}
+            style={selectStyle}
+          >
+            {LOCATIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ minWidth: "180px", flex: "1 1 180px" }}>
+          <label htmlFor="summary-dropoff-location" style={{ ...labelStyle, marginBottom: "0.35rem" }}>
+            Drop-off Location
+          </label>
+          <select
+            id="summary-dropoff-location"
+            value={dropoffLocation}
+            onChange={(e) => setDropoffLocation(e.target.value)}
+            style={selectStyle}
+          >
+            {LOCATIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ minWidth: "180px", flex: "1 1 180px" }}>
+          <label htmlFor="summary-pickup-datetime" style={{ ...labelStyle, marginBottom: "0.35rem" }}>
+            Pickup
+          </label>
+          <input
+            id="summary-pickup-datetime"
+            type="datetime-local"
+            value={pickup}
+            min={now}
+            onChange={(e) => setPickup(e.target.value)}
+            style={datetimeFieldStyle}
+          />
+        </div>
+
+        <div style={{ minWidth: "180px", flex: "1 1 180px" }}>
+          <label htmlFor="summary-return-datetime" style={{ ...labelStyle, marginBottom: "0.35rem" }}>
+            Return
+          </label>
+          <input
+            id="summary-return-datetime"
+            type="datetime-local"
+            value={returnDate}
+            min={pickup || now}
+            onChange={(e) => setReturnDate(e.target.value)}
+            style={datetimeFieldStyle}
+          />
+        </div>
+
+        {validation.errors.length > 0 && (
+          <div style={{ width: "100%", flex: "1 1 100%" }}>
+            {validation.errors.map((error) => (
+              <p
+                key={error}
+                style={{
+                  margin: "0 0 0.35rem",
+                  fontSize: "0.8125rem",
+                  color: "#dc2626",
+                  lineHeight: 1.5,
+                }}
+              >
+                {error}
+              </p>
+            ))}
           </div>
-        ))}
+        )}
+
+        <div style={{ minWidth: "140px" }}>
+          <p style={{ ...labelStyle, marginBottom: "0.35rem" }}>Duration</p>
+          <p
+            style={{
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              color: NAVY,
+            }}
+          >
+            {hasValidDates
+              ? `${durationDays} day${durationDays === 1 ? "" : "s"}`
+              : "—"}
+          </p>
+        </div>
       </div>
 
       <div
@@ -311,7 +590,7 @@ function CarsPageContent() {
                   color: NAVY,
                 }}
               >
-                ₹{PRICE_PER_DAY.toLocaleString("en-IN")}
+                ₹{BASE_RATE_PER_DAY.toLocaleString("en-IN")}
               </span>
               <span style={{ fontSize: "0.875rem", color: "#6b7280", marginLeft: "0.25rem" }}>
                 /day
@@ -331,7 +610,7 @@ function CarsPageContent() {
                 fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif",
                 color: WHITE,
-                backgroundColor: selectHover ? "#2d3494" : NAVY,
+                backgroundColor: selectHover ? NAVY_LIGHT : NAVY,
                 border: "none",
                 borderRadius: "10px",
                 cursor: "pointer",
@@ -415,31 +694,6 @@ function CarsPageContent() {
                 />
               </div>
 
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label htmlFor="address" style={labelStyle}>
-                  Address in Goa (where you&apos;re staying)
-                </label>
-                <input
-                  id="address"
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  style={fieldStyle}
-                />
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label htmlFor="special-requests" style={labelStyle}>
-                  Special Requests (optional)
-                </label>
-                <textarea
-                  id="special-requests"
-                  rows={2}
-                  value={specialRequests}
-                  onChange={(e) => setSpecialRequests(e.target.value)}
-                  style={{ ...fieldStyle, resize: "vertical" }}
-                />
-              </div>
             </div>
 
             <div
@@ -456,22 +710,20 @@ function CarsPageContent() {
                 border: "1px solid #e2e8f0",
               }}
             >
-              <div>
-                <p style={{ ...labelStyle, marginBottom: "0.25rem" }}>Total Price</p>
-                <p
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    fontSize: "1.75rem",
-                    fontWeight: 700,
-                    color: NAVY,
-                  }}
-                >
-                  ₹{totalPrice.toLocaleString("en-IN")}
-                </p>
-                <p style={{ fontSize: "0.8125rem", color: "#6b7280", marginTop: "0.25rem" }}>
-                  {days} day{days === 1 ? "" : "s"} × ₹{PRICE_PER_DAY.toLocaleString("en-IN")}
-                </p>
-              </div>
+              {priceBreakdown ? (
+                <PriceBreakdownCard
+                  breakdown={priceBreakdown}
+                  pickupDatetime={pickupDatetime}
+                  returnDatetime={returnDatetime}
+                />
+              ) : (
+                <div style={{ flex: "1 1 280px", minWidth: "240px" }}>
+                  <p style={{ ...labelStyle, marginBottom: "0.25rem" }}>Price</p>
+                  <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                    Enter valid pickup and return dates to see pricing.
+                  </p>
+                </div>
+              )}
 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.75rem" }}>
                 {submitError && (
@@ -492,7 +744,7 @@ function CarsPageContent() {
 
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitDisabled}
                   onMouseEnter={() => setSubmitHover(true)}
                   onMouseLeave={() => setSubmitHover(false)}
                   style={{
@@ -501,14 +753,18 @@ function CarsPageContent() {
                     fontWeight: 600,
                     fontFamily: "'DM Sans', sans-serif",
                     color: WHITE,
-                    backgroundColor: submitting ? "#6b7280" : submitHover ? "#2d3494" : NAVY,
+                    backgroundColor: submitDisabled
+                      ? "#6b7280"
+                      : submitHover
+                        ? NAVY_LIGHT
+                        : NAVY,
                     border: "none",
                     borderRadius: "10px",
-                    cursor: submitting ? "not-allowed" : "pointer",
+                    cursor: submitDisabled ? "not-allowed" : "pointer",
                     transition: "background-color 0.2s ease",
                     boxShadow: "0 4px 14px rgba(26, 31, 94, 0.35)",
                     whiteSpace: "nowrap",
-                    opacity: submitting ? 0.8 : 1,
+                    opacity: submitDisabled ? 0.8 : 1,
                   }}
                 >
                   {submitting ? "Submitting…" : "Submit Booking Request"}

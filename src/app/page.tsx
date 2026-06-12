@@ -1,15 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-
-const LOCATIONS = [
-  "Panaji",
-  "Calangute",
-  "Margao",
-  "Vasco",
-  "Airport (Dabolim)",
-] as const;
+import { useState } from "react";
+import { LOCATIONS, validateBooking } from "@/lib/pricing";
 
 const HERO_IMAGE =
   "https://images.unsplash.com/photo-1580584126903-c17d4184de1e?auto=format&fit=crop&w=1920&q=80";
@@ -52,15 +45,15 @@ const datetimeFieldStyle: React.CSSProperties = {
   appearance: "none",
 };
 
-function fieldGroupStyle(isMobile: boolean, flexBasis = "160px"): React.CSSProperties {
-  return {
-    width: "100%",
-    minWidth: 0,
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    flex: isMobile ? "none" : `1 1 ${flexBasis}`,
-  };
-}
+const errorTextStyle: React.CSSProperties = {
+  marginTop: "0.35rem",
+  fontSize: "0.8125rem",
+  color: "#dc2626",
+  lineHeight: 1.4,
+};
+
+const ADVANCE_NOTICE_ERROR = "Pickup must be scheduled at least 24 hours in advance.";
+const MINIMUM_DURATION_ERROR = "Minimum booking duration is 3 days (72 hours).";
 
 const selectStyle: React.CSSProperties = {
   ...fieldStyle,
@@ -85,35 +78,58 @@ export default function Home() {
   const [differentDropoff, setDifferentDropoff] = useState(false);
   const [dropoffLocation, setDropoffLocation] = useState<string>(LOCATIONS[0]);
   const [searchHover, setSearchHover] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    function checkMobile() {
-      setIsMobile(window.innerWidth < 768);
-    }
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const [pickupError, setPickupError] = useState("");
+  const [returnError, setReturnError] = useState("");
 
   const now = toDatetimeLocal(new Date());
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
 
-    const dropLocation = differentDropoff ? dropoffLocation : location;
+    setPickupError("");
+    setReturnError("");
 
-    if (!location || !pickupDate || !returnDate) {
-      alert("Please fill in all fields before searching.");
+    const dropoff = differentDropoff ? dropoffLocation : location;
+
+    if (!pickupDate) {
+      setPickupError("Please select a pickup date.");
+      return;
+    }
+
+    if (!returnDate) {
+      setReturnError("Please select a return date.");
+      return;
+    }
+
+    const pickupDatetime = new Date(pickupDate);
+    const returnDatetime = new Date(returnDate);
+
+    const validation = validateBooking(pickupDatetime, returnDatetime);
+
+    if (!validation.valid) {
+      let pickupMsg = "";
+      let returnMsg = "";
+
+      for (const error of validation.errors) {
+        if (error === ADVANCE_NOTICE_ERROR) {
+          pickupMsg = error;
+        } else if (error === MINIMUM_DURATION_ERROR) {
+          returnMsg = error;
+        } else {
+          returnMsg = returnMsg ? `${returnMsg} ${error}` : error;
+        }
+      }
+
+      if (pickupMsg) setPickupError(pickupMsg);
+      if (returnMsg) setReturnError(returnMsg);
       return;
     }
 
     const params = new URLSearchParams({
       location,
+      dropoff,
       pickup: pickupDate,
-      returnDate,
-      dropLocation,
+      return: returnDate,
     });
 
     router.push(`/cars?${params.toString()}`);
@@ -204,146 +220,194 @@ export default function Home() {
             textAlign: "left",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              flexWrap: isMobile ? "nowrap" : "wrap",
-              gap: "1rem",
-              alignItems: isMobile ? "stretch" : "flex-end",
-              width: "100%",
-              minWidth: 0,
-              maxWidth: "100%",
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={fieldGroupStyle(isMobile, "180px")}>
-              <label htmlFor="location" style={labelStyle}>
-                Location
-              </label>
-              <select
-                id="location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                style={selectStyle}
-              >
-                {LOCATIONS.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
+          <style>{`
+            .widget-container {
+              width: 100%;
+              min-width: 0;
+              box-sizing: border-box;
+            }
+            .widget-row-1 {
+              display: flex;
+              align-items: flex-start;
+              gap: 12px;
+              width: 100%;
+              min-width: 0;
+              box-sizing: border-box;
+            }
+            .widget-field {
+              flex: 1;
+              min-width: 0;
+              box-sizing: border-box;
+            }
+            .widget-search-btn {
+              flex-shrink: 0;
+              width: 140px;
+              align-self: flex-start;
+              box-sizing: border-box;
+            }
+            .widget-checkbox {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              margin-top: 16px;
+              box-sizing: border-box;
+            }
+            .widget-dropoff-wrap {
+              width: calc((100% - 140px - 36px) / 3);
+              max-width: calc((100% - 140px - 36px) / 3);
+              margin-top: 16px;
+              box-sizing: border-box;
+            }
+            @media (max-width: 767px) {
+              .widget-container {
+                display: flex;
+                flex-direction: column;
+              }
+              .widget-row-1 {
+                display: contents;
+              }
+              .widget-field,
+              .widget-search-btn,
+              .widget-dropoff-wrap {
+                width: 100%;
+                max-width: 100%;
+              }
+              .widget-location { order: 1; }
+              .widget-pickup { order: 2; }
+              .widget-return { order: 3; }
+              .widget-checkbox { order: 4; margin-top: 0; }
+              .widget-dropoff-wrap { order: 5; margin-top: 0; }
+              .widget-search-btn { order: 6; }
+              .widget-search-spacer { display: none; }
+            }
+          `}</style>
+
+          <div className="widget-container">
+            <div className="widget-row-1">
+              <div className="widget-field widget-location">
+                <label htmlFor="location" style={labelStyle}>
+                  Location
+                </label>
+                <select
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  style={selectStyle}
+                >
+                  {LOCATIONS.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="widget-field widget-pickup" style={{ overflow: "hidden" }}>
+                <label htmlFor="pickup-date" style={labelStyle}>
+                  Pickup Date
+                </label>
+                <input
+                  id="pickup-date"
+                  type="datetime-local"
+                  value={pickupDate}
+                  min={now}
+                  onChange={(e) => {
+                    setPickupDate(e.target.value);
+                    setPickupError("");
+                  }}
+                  style={datetimeFieldStyle}
+                />
+                {pickupError && <p style={errorTextStyle}>{pickupError}</p>}
+              </div>
+
+              <div className="widget-field widget-return" style={{ overflow: "hidden" }}>
+                <label htmlFor="return-date" style={labelStyle}>
+                  Return Date
+                </label>
+                <input
+                  id="return-date"
+                  type="datetime-local"
+                  value={returnDate}
+                  min={pickupDate || now}
+                  onChange={(e) => {
+                    setReturnDate(e.target.value);
+                    setReturnError("");
+                  }}
+                  style={datetimeFieldStyle}
+                />
+                {returnError && <p style={errorTextStyle}>{returnError}</p>}
+              </div>
+
+              <div className="widget-search-btn">
+                <span className="widget-search-spacer" style={{ ...labelStyle, visibility: "hidden" }} aria-hidden="true">
+                  Search
+                </span>
+                <button
+                  type="submit"
+                  onMouseEnter={() => setSearchHover(true)}
+                  onMouseLeave={() => setSearchHover(false)}
+                  style={{
+                    width: "100%",
+                    height: "48px",
+                    padding: "0 1.5rem",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    color: WHITE,
+                    backgroundColor: searchHover ? "#2d3494" : NAVY,
+                    border: "none",
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s ease",
+                    boxShadow: "0 4px 14px rgba(26, 31, 94, 0.35)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Search
+                </button>
+              </div>
             </div>
 
-            <div style={{ ...fieldGroupStyle(isMobile), overflow: "hidden" }}>
-              <label htmlFor="pickup-date" style={labelStyle}>
-                Pickup Date
-              </label>
-              <input
-                id="pickup-date"
-                type="datetime-local"
-                value={pickupDate}
-                min={now}
-                onChange={(e) => setPickupDate(e.target.value)}
-                style={datetimeFieldStyle}
-              />
-            </div>
-
-            <div style={{ ...fieldGroupStyle(isMobile), overflow: "hidden" }}>
-              <label htmlFor="return-date" style={labelStyle}>
-                Return Date
-              </label>
-              <input
-                id="return-date"
-                type="datetime-local"
-                value={returnDate}
-                min={pickupDate || now}
-                onChange={(e) => setReturnDate(e.target.value)}
-                style={datetimeFieldStyle}
-              />
-            </div>
-
-            <div
+            <label
+              htmlFor="different-dropoff"
+              className="widget-checkbox"
               style={{
-                ...fieldGroupStyle(isMobile),
-                flex: isMobile ? "none" : "0 0 auto",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                color: NAVY,
+                cursor: "pointer",
               }}
             >
-              <button
-                type="submit"
-                onMouseEnter={() => setSearchHover(true)}
-                onMouseLeave={() => setSearchHover(false)}
-                style={{
-                  width: "100%",
-                  padding: "0.8rem 2rem",
-                  fontSize: "0.9375rem",
-                  fontWeight: 600,
-                  fontFamily: "'DM Sans', sans-serif",
-                  color: WHITE,
-                  backgroundColor: searchHover ? "#2d3494" : NAVY,
-                  border: "none",
-                  borderRadius: "10px",
-                  cursor: "pointer",
-                  transition: "background-color 0.2s ease",
-                  boxShadow: "0 4px 14px rgba(26, 31, 94, 0.35)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Search
-              </button>
-            </div>
+              <input
+                id="different-dropoff"
+                type="checkbox"
+                checked={differentDropoff}
+                onChange={(e) => setDifferentDropoff(e.target.checked)}
+                style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: NAVY }}
+              />
+              Different drop-off location?
+            </label>
+
+            {differentDropoff && (
+              <div className="widget-dropoff-wrap">
+                <label htmlFor="dropoff-location" style={labelStyle}>
+                  Drop-off Location
+                </label>
+                <select
+                  id="dropoff-location"
+                  value={dropoffLocation}
+                  onChange={(e) => setDropoffLocation(e.target.value)}
+                  style={selectStyle}
+                >
+                  {LOCATIONS.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-
-          <label
-            htmlFor="different-dropoff"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              marginTop: "1rem",
-              fontSize: "0.875rem",
-              fontWeight: 500,
-              color: NAVY,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              id="different-dropoff"
-              type="checkbox"
-              checked={differentDropoff}
-              onChange={(e) => setDifferentDropoff(e.target.checked)}
-              style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: NAVY }}
-            />
-            Different drop-off location?
-          </label>
-
-          {differentDropoff && (
-            <div
-              style={{
-                marginTop: "1rem",
-                width: "100%",
-                minWidth: 0,
-                maxWidth: isMobile ? "100%" : "280px",
-                boxSizing: "border-box",
-              }}
-            >
-              <label htmlFor="dropoff-location" style={labelStyle}>
-                Drop-off Location
-              </label>
-              <select
-                id="dropoff-location"
-                value={dropoffLocation}
-                onChange={(e) => setDropoffLocation(e.target.value)}
-                style={selectStyle}
-              >
-                {LOCATIONS.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </form>
 
         <p
