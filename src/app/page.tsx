@@ -42,6 +42,25 @@ const fieldStyle: React.CSSProperties = {
   outline: "none",
 };
 
+const datetimeFieldStyle: React.CSSProperties = {
+  ...fieldStyle,
+  display: "block",
+  minWidth: 0,
+  maxWidth: "100%",
+  WebkitAppearance: "none",
+  appearance: "none",
+};
+
+function fieldGroupStyle(isMobile: boolean, flexBasis = "160px"): React.CSSProperties {
+  return {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    flex: isMobile ? "none" : `1 1 ${flexBasis}`,
+  };
+}
+
 const selectStyle: React.CSSProperties = {
   ...fieldStyle,
   cursor: "pointer",
@@ -173,6 +192,10 @@ export default function Home() {
         <form
           onSubmit={handleSearch}
           style={{
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflow: "hidden",
             backgroundColor: WHITE,
             borderRadius: "16px",
             padding: "1.75rem 1.5rem",
@@ -187,15 +210,13 @@ export default function Home() {
               flexWrap: isMobile ? "nowrap" : "wrap",
               gap: "1rem",
               alignItems: isMobile ? "stretch" : "flex-end",
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
+              boxSizing: "border-box",
             }}
           >
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 180px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={fieldGroupStyle(isMobile, "180px")}>
               <label htmlFor="location" style={labelStyle}>
                 Location
               </label>
@@ -213,13 +234,7 @@ export default function Home() {
               </select>
             </div>
 
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 160px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={{ ...fieldGroupStyle(isMobile), overflow: "hidden" }}>
               <label htmlFor="pickup-date" style={labelStyle}>
                 Pickup Date
               </label>
@@ -229,17 +244,11 @@ export default function Home() {
                 value={pickupDate}
                 min={now}
                 onChange={(e) => setPickupDate(e.target.value)}
-                style={fieldStyle}
+                style={datetimeFieldStyle}
               />
             </div>
 
-            <div
-              style={{
-                flex: isMobile ? "none" : "1 1 160px",
-                minWidth: isMobile ? "auto" : "140px",
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
+            <div style={{ ...fieldGroupStyle(isMobile), overflow: "hidden" }}>
               <label htmlFor="return-date" style={labelStyle}>
                 Return Date
               </label>
@@ -249,15 +258,14 @@ export default function Home() {
                 value={returnDate}
                 min={pickupDate || now}
                 onChange={(e) => setReturnDate(e.target.value)}
-                style={fieldStyle}
+                style={datetimeFieldStyle}
               />
             </div>
 
             <div
               style={{
+                ...fieldGroupStyle(isMobile),
                 flex: isMobile ? "none" : "0 0 auto",
-                minWidth: isMobile ? "auto" : "120px",
-                width: isMobile ? "100%" : "auto",
               }}
             >
               <button
@@ -312,8 +320,10 @@ export default function Home() {
             <div
               style={{
                 marginTop: "1rem",
+                width: "100%",
+                minWidth: 0,
                 maxWidth: isMobile ? "100%" : "280px",
-                width: isMobile ? "100%" : "auto",
+                boxSizing: "border-box",
               }}
             >
               <label htmlFor="dropoff-location" style={labelStyle}>
