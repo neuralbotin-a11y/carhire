@@ -430,7 +430,7 @@ export default function Home() {
             fontWeight: 500,
           }}
         >
-          Free cancellation · Transparent pricing · Instant confirmation
+          Easy cancellation · Transparent pricing · Quick confirmation
         </p>
       </div>
     </section>
