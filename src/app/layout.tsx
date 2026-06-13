@@ -2,11 +2,15 @@
 
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/ui/Navbar";
+import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
+import Footer from "@/components/ui/Footer";
 
 export const metadata: Metadata = {
-  title: "CarHire Goa — Self Drive Car Rentals",
+  title: "SmartWheels — Self Drive Car Rentals in Goa",
   description: "Book self-drive rental cars in Goa. Simple, affordable, no driver needed.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
@@ -17,10 +21,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Navbar />
+        <ConditionalNavbar />
         <main className="min-h-screen bg-brand-offwhite">
           {children}
         </main>
+        <Footer />
       </body>
     </html>
   );
