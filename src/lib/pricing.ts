@@ -52,6 +52,18 @@ export interface PriceBreakdown {
   totalPayable: number;
 }
 
+export interface PriceMetadata {
+  baseDays: number;
+  baseRate: number;
+  pickupLocationCharge: number;
+  dropoffLocationCharge: number;
+  nightSurcharge: number;
+  washingCharge: number;
+  subtotal: number;
+  securityDeposit: number;
+  totalPayable: number;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: string[];

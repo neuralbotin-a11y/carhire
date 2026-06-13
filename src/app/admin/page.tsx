@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { bookingService } from "@/services/booking.service";
 import type { BookingFull, BookingStatus as SupabaseBookingStatus } from "@/lib/types";
+import type { PriceMetadata } from "@/lib/pricing";
 
 const NAVY = "#1a1f5e";
 const NAVY_LIGHT = "#2d3494";
@@ -32,6 +33,8 @@ type Booking = {
   duration: string;
   carName: string;
   totalPrice: number;
+  securityDeposit: number | null;
+  metadata: PriceMetadata | null;
   status: BookingStatus;
   adminNote: string;
 };
@@ -84,6 +87,15 @@ function formatBookingDatetime(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", DATE_TIME_FORMAT);
 }
 
+function formatRupee(amount: number): string {
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+function parseMetadata(raw: Record<string, unknown> | null | undefined): PriceMetadata | null {
+  if (!raw || typeof raw.subtotal !== "number") return null;
+  return raw as PriceMetadata;
+}
+
 function mapSupabaseStatus(status: string): BookingStatus {
   const labels: Record<string, BookingStatus> = {
     pending: "Pending",
@@ -113,6 +125,8 @@ function mapBookingFull(row: BookingFull): Booking {
     duration: `${row.duration_days} days`,
     carName: row.car_name,
     totalPrice: row.total_price,
+    securityDeposit: row.security_deposit ?? null,
+    metadata: parseMetadata(row.metadata),
     status: mapSupabaseStatus(row.status),
     adminNote: row.admin_note ?? "",
   };
@@ -1080,7 +1094,17 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               boxSizing: "border-box",
             }}
           >
-            {filteredBookings.map((booking) => (
+            {filteredBookings.map((booking) => {
+              const deposit =
+                booking.metadata?.securityDeposit ??
+                booking.securityDeposit ??
+                null;
+              const rentalTotal =
+                booking.metadata?.subtotal ??
+                (booking.totalPrice - (booking.securityDeposit ?? 0)) ??
+                booking.totalPrice;
+
+              return (
               <article
                 key={booking.id}
                 style={{
@@ -1221,11 +1245,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   </div>
                 </div>
 
-                {/* Fourth row: car name + price */}
+                {/* Fourth row: car name + pricing */}
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     justifyContent: "space-between",
                     gap: "1rem",
                     marginBottom: "1rem",
@@ -1241,17 +1265,53 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   >
                     {booking.carName}
                   </span>
-                  <span
+                  <div
                     style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: NAVY,
-                      whiteSpace: "nowrap",
+                      display: "flex",
+                      gap: "1.5rem",
+                      flexWrap: "wrap",
                     }}
                   >
-                    ₹{booking.totalPrice.toLocaleString("en-IN")}
-                  </span>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={tripLabelStyle}>Rental Total</div>
+                      <span
+                        style={{
+                          fontFamily: "'Outfit', sans-serif",
+                          fontSize: "1.25rem",
+                          fontWeight: 700,
+                          color: NAVY,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {formatRupee(rentalTotal)}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={tripLabelStyle}>Deposit</div>
+                      <span
+                        style={{
+                          fontFamily: "'Outfit', sans-serif",
+                          fontSize: "1.25rem",
+                          fontWeight: 700,
+                          color: NAVY,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {deposit != null ? formatRupee(deposit) : "—"}
+                      </span>
+                      {deposit != null && (
+                        <div
+                          style={{
+                            fontSize: "0.6875rem",
+                            color: "#888888",
+                            marginTop: "0.15rem",
+                          }}
+                        >
+                          Refundable
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Bottom row: status dropdown + admin note */}
@@ -1313,7 +1373,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   />
                 </div>
               </article>
-            ))}
+            );
+            })}
           </div>
         )}
 

@@ -51,9 +51,6 @@ export const bookingService = {
     const car = await getBalenoModelId(tenantId);
     if (!car) return { data: null, error: 'Car not found.' };
 
-    const days  = computeDurationDays(input.pickup_datetime, input.return_datetime);
-    const total = car.price_per_day * days;
-
     const { data, error } = await supabase
       .from('bookings')
       .insert({
@@ -79,9 +76,10 @@ export const bookingService = {
         return_datetime:   input.return_datetime,
         // Pricing
         price_per_day:     car.price_per_day,
-        total_price:       total,
-        security_deposit:  car.security_deposit,
+        total_price:       input.total_price,
+        security_deposit:  input.metadata.securityDeposit,
         discount_amount:   0,
+        metadata:          input.metadata,
         // Extra
         special_requests:  input.special_requests?.trim() || null,
         status:            'pending',

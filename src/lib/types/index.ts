@@ -1,3 +1,5 @@
+import type { PriceMetadata } from '@/lib/pricing';
+
 // ── Enums ────────────────────────────────────────────────────
 
 export type BookingStatus =
@@ -194,6 +196,8 @@ export interface BookingFormInput {
   pickup_datetime:   string;
   return_datetime:   string;
   special_requests:  string;
+  total_price:       number;
+  metadata:          PriceMetadata;
 }
 
 // ── Service result wrapper ────────────────────────────────────

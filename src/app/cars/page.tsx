@@ -8,6 +8,7 @@ import {
   calculatePrice,
   validateBooking,
   type PriceBreakdown,
+  type PriceMetadata,
 } from "@/lib/pricing";
 import { bookingService } from "@/services/booking.service";
 
@@ -306,6 +307,18 @@ function CarsPageContent() {
       pickup_datetime: pickup,
       return_datetime: returnDate,
       special_requests: "",
+      total_price: priceBreakdown.totalPayable,
+      metadata: {
+        baseDays: priceBreakdown.baseDays,
+        baseRate: priceBreakdown.baseRate,
+        pickupLocationCharge: priceBreakdown.pickupLocationCharge,
+        dropoffLocationCharge: priceBreakdown.dropoffLocationCharge,
+        nightSurcharge: priceBreakdown.nightSurcharge,
+        washingCharge: priceBreakdown.washingCharge,
+        subtotal: priceBreakdown.subtotal,
+        securityDeposit: priceBreakdown.securityDeposit,
+        totalPayable: priceBreakdown.totalPayable,
+      } satisfies PriceMetadata,
     });
 
     if (error) {
@@ -790,22 +803,24 @@ function CarsPageContent() {
 
 export default function CarsPage() {
   return (
-    <Suspense
-      fallback={
-        <div
-          style={{
-            maxWidth: "960px",
-            margin: "0 auto",
-            padding: "2rem 1.5rem",
-            color: NAVY,
-            fontSize: "0.9375rem",
-          }}
-        >
-          Loading cars…
-        </div>
-      }
-    >
-      <CarsPageContent />
-    </Suspense>
+    <div style={{ paddingTop: "72px" }}>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              maxWidth: "960px",
+              margin: "0 auto",
+              padding: "2rem 1.5rem",
+              color: NAVY,
+              fontSize: "0.9375rem",
+            }}
+          >
+            Loading cars…
+          </div>
+        }
+      >
+        <CarsPageContent />
+      </Suspense>
+    </div>
   );
 }
