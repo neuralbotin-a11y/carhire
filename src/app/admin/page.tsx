@@ -1101,8 +1101,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 null;
               const rentalTotal =
                 booking.metadata?.subtotal ??
-                (booking.totalPrice - (booking.securityDeposit ?? 0)) ??
-                booking.totalPrice;
+                booking.totalPrice - (booking.securityDeposit ?? 0);
 
               return (
               <article
