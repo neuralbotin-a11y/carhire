@@ -93,7 +93,7 @@ function formatRupee(amount: number): string {
 
 function parseMetadata(raw: Record<string, unknown> | null | undefined): PriceMetadata | null {
   if (!raw || typeof raw.subtotal !== "number") return null;
-  return raw as PriceMetadata;
+  return raw as unknown as PriceMetadata;
 }
 
 function mapSupabaseStatus(status: string): BookingStatus {
