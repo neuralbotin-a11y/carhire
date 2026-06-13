@@ -155,13 +155,10 @@ export default function Navbar() {
                 Home
               </Link>
               <Link href="/cars" style={navLinkStyle}>
-                Our Fleet
+                Cars
               </Link>
-              <Link href="#how-it-works" style={navLinkStyle}>
+              <Link href="how-it-works" style={navLinkStyle}>
                 How It Works
-              </Link>
-              <Link href="/contact" style={navLinkStyle}>
-                Contact
               </Link>
             </div>
 
@@ -186,7 +183,7 @@ export default function Navbar() {
             style={navLinkStyle}
             onClick={() => setMenuOpen(false)}
           >
-            Our Fleet
+            Cars
           </Link>
           <Link
             href="#how-it-works"
@@ -194,13 +191,6 @@ export default function Navbar() {
             onClick={() => setMenuOpen(false)}
           >
             How It Works
-          </Link>
-          <Link
-            href="/contact"
-            style={navLinkStyle}
-            onClick={() => setMenuOpen(false)}
-          >
-            Contact
           </Link>
           <Link
             href="/login"

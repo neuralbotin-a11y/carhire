@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ConditionalNavbar from "@/components/ui/ConditionalNavbar";
+import Footer from "@/components/ui/Footer";
 
 export const metadata: Metadata = {
   title: "SmartWheels — Self Drive Car Rentals in Goa",
@@ -24,6 +25,7 @@ export default function RootLayout({
         <main className="min-h-screen bg-brand-offwhite">
           {children}
         </main>
+        <Footer />
       </body>
     </html>
   );

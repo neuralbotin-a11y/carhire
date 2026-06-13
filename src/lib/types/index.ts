@@ -198,6 +198,13 @@ export interface BookingFormInput {
   special_requests:  string;
   total_price:       number;
   metadata:          PriceMetadata;
+  model_id:          string;
+  car_name:          string;
+  car_category:      string;
+  fuel:              string;
+  transmission:      string;
+  seats:             number;
+  price_per_day:     number;
 }
 
 // ── Service result wrapper ────────────────────────────────────

@@ -28,18 +28,6 @@ async function getSmartWheelsTenantId(): Promise<string | null> {
   return data?.id ?? null;
 }
 
-// ── Get Baleno model ID ───────────────────────────────────────
-
-async function getBalenoModelId(tenantId: string): Promise<{ id: string; price_per_day: number; security_deposit: number } | null> {
-  const { data } = await supabase
-    .from('car_models')
-    .select('id, price_per_day, security_deposit')
-    .eq('tenant_id', tenantId)
-    .eq('name', 'Maruti Baleno')
-    .single();
-  return data ?? null;
-}
-
 // ── Service ──────────────────────────────────────────────────
 
 export const bookingService = {
@@ -48,25 +36,26 @@ export const bookingService = {
     const tenantId = await getSmartWheelsTenantId();
     if (!tenantId) return { data: null, error: 'Tenant not found.' };
 
-    const car = await getBalenoModelId(tenantId);
-    if (!car) return { data: null, error: 'Car not found.' };
+    if (!input.model_id) {
+      return { data: null, error: 'Car not selected.' };
+    }
 
     const { data, error } = await supabase
       .from('bookings')
       .insert({
         tenant_id:         tenantId,
-        model_id:          car.id,
+        model_id:          input.model_id,
         // Customer snapshot
         customer_name:     input.customer_name.trim(),
         customer_phone:    input.customer_phone.trim(),
         customer_email:    input.customer_email.toLowerCase().trim(),
         customer_address:  input.customer_address?.trim() || null,
         // Car snapshot
-        car_name:          'Maruti Baleno',
-        car_category:      'hatchback',
-        transmission:      'manual',
-        fuel:              'petrol',
-        seats:             5,
+        car_name:          input.car_name,
+        car_category:      input.car_category,
+        transmission:      input.transmission,
+        fuel:              input.fuel,
+        seats:             input.seats,
         // Trip
         pickup_location:   input.pickup_location,
         dropoff_location:  input.different_dropoff && input.dropoff_location
@@ -75,7 +64,7 @@ export const bookingService = {
         pickup_datetime:   input.pickup_datetime,
         return_datetime:   input.return_datetime,
         // Pricing
-        price_per_day:     car.price_per_day,
+        price_per_day:     input.price_per_day,
         total_price:       input.total_price,
         security_deposit:  input.metadata.securityDeposit,
         discount_amount:   0,

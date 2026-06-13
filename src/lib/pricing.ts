@@ -1,14 +1,8 @@
-/** Base daily rental rate in rupees */
-const BASE_RATE_PER_DAY = 1500;
-
 /** Minimum billable days for any booking */
 const MINIMUM_DAYS = 3;
 
 /** Fixed washing fee applied to every booking */
 const WASHING_CHARGE = 300;
-
-/** Refundable security deposit (shown separately, not in subtotal) */
-const SECURITY_DEPOSIT = 3000;
 
 /** Night surcharge per pickup or drop-off during night hours */
 const NIGHT_SURCHARGE_PER_EVENT = 300;
@@ -88,10 +82,12 @@ export function calculatePrice(
   pickupLocation: string,
   dropoffLocation: string,
   pickupDatetime: Date,
-  returnDatetime: Date
+  returnDatetime: Date,
+  pricePerDay: number,
+  securityDeposit: number
 ): PriceBreakdown {
   const baseDays = getBaseDays(pickupDatetime, returnDatetime);
-  const baseRate = BASE_RATE_PER_DAY * baseDays;
+  const baseRate = pricePerDay * baseDays;
 
   const pickupLocationCharge = getLocationCharge(pickupLocation);
   const dropoffLocationCharge = getLocationCharge(dropoffLocation);
@@ -112,7 +108,6 @@ export function calculatePrice(
     dropoffLocationCharge +
     nightSurcharge +
     washingCharge;
-  const securityDeposit = SECURITY_DEPOSIT;
   const totalPayable = subtotal + securityDeposit;
 
   return {

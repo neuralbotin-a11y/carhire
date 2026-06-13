@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   LOCATIONS,
   calculatePrice,
@@ -11,12 +10,12 @@ import {
   type PriceMetadata,
 } from "@/lib/pricing";
 import { bookingService } from "@/services/booking.service";
+import { getActiveCars, type CarModel } from "@/services/carService";
 
 const NAVY = "#1a1f5e";
 const NAVY_LIGHT = "#2d3494";
 const WHITE = "#ffffff";
 const OFFWHITE = "#f4f6fb";
-const BASE_RATE_PER_DAY = 1500;
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -99,6 +98,11 @@ function formatRupee(amount: number) {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+function capitalize(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function PriceLine({
   label,
   amount,
@@ -147,16 +151,18 @@ function PriceBreakdownCard({
   breakdown,
   pickupDatetime,
   returnDatetime,
+  pricePerDay,
 }: {
   breakdown: PriceBreakdown;
   pickupDatetime: Date;
   returnDatetime: Date;
+  pricePerDay: number;
 }) {
   return (
     <div style={{ flex: "1 1 280px", minWidth: "240px" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         <PriceLine
-          label={`Base rate (₹${BASE_RATE_PER_DAY.toLocaleString("en-IN")} × ${breakdown.baseDays} days)`}
+          label={`Base rate (₹${pricePerDay.toLocaleString("en-IN")} × ${breakdown.baseDays} days)`}
           amount={breakdown.baseRate}
         />
         <PriceLine label="Pickup location charge" amount={breakdown.pickupLocationCharge} />
@@ -252,6 +258,10 @@ function CarsPageContent() {
   const [returnDate, setReturnDate] = useState(
     searchParams.get("return") ?? searchParams.get("returnDate") ?? ""
   );
+  const [cars, setCars] = useState<CarModel[]>([]);
+  const [carsLoading, setCarsLoading] = useState(true);
+  const [carsError, setCarsError] = useState("");
+  const [selectedCar, setSelectedCar] = useState<CarModel | null>(null);
 
   const pickupDatetime = useMemo(() => new Date(pickup), [pickup]);
   const returnDatetime = useMemo(() => new Date(returnDate), [returnDate]);
@@ -270,9 +280,41 @@ function CarsPageContent() {
   }, [hasValidDates, pickupDatetime, returnDatetime]);
 
   const priceBreakdown = useMemo(() => {
-    if (!hasValidDates) return null;
-    return calculatePrice(pickupLocation, dropoffLocation, pickupDatetime, returnDatetime);
-  }, [hasValidDates, pickupLocation, dropoffLocation, pickupDatetime, returnDatetime]);
+    if (!hasValidDates || !selectedCar) return null;
+    return calculatePrice(
+      pickupLocation,
+      dropoffLocation,
+      pickupDatetime,
+      returnDatetime,
+      selectedCar.price_per_day,
+      selectedCar.security_deposit
+    );
+  }, [
+    hasValidDates,
+    pickupLocation,
+    dropoffLocation,
+    pickupDatetime,
+    returnDatetime,
+    selectedCar,
+  ]);
+
+  useEffect(() => {
+    async function loadCars() {
+      setCarsLoading(true);
+      setCarsError("");
+
+      try {
+        setCars(await getActiveCars());
+      } catch (err) {
+        setCarsError(err instanceof Error ? err.message : "Failed to load cars.");
+        setCars([]);
+      } finally {
+        setCarsLoading(false);
+      }
+    }
+
+    loadCars();
+  }, []);
 
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -287,11 +329,12 @@ function CarsPageContent() {
   const now = toDatetimeLocal(new Date());
   const firstName = fullName.trim().split(/\s+/)[0] || "there";
   const durationDays = priceBreakdown?.baseDays ?? 0;
-  const submitDisabled = submitting || !validation.valid || !priceBreakdown;
+  const submitDisabled =
+    submitting || !validation.valid || !priceBreakdown || !selectedCar;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitDisabled) return;
+    if (submitDisabled || !selectedCar || !priceBreakdown) return;
 
     setSubmitting(true);
     setSubmitError("");
@@ -308,6 +351,13 @@ function CarsPageContent() {
       return_datetime: returnDate,
       special_requests: "",
       total_price: priceBreakdown.totalPayable,
+      model_id: selectedCar.id,
+      car_name: selectedCar.name,
+      car_category: selectedCar.category,
+      fuel: selectedCar.fuel,
+      transmission: selectedCar.transmission,
+      seats: selectedCar.seats,
+      price_per_day: selectedCar.price_per_day,
       metadata: {
         baseDays: priceBreakdown.baseDays,
         baseRate: priceBreakdown.baseRate,
@@ -509,134 +559,218 @@ function CarsPageContent() {
         </div>
       </div>
 
-      <div
-        style={{
-          ...cardShadow,
-          backgroundColor: WHITE,
-          borderRadius: "16px",
-          overflow: "hidden",
-        }}
-      >
-        <div
+      {carsLoading && (
+        <p
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "1.5rem",
-            padding: "1.5rem",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "0.9375rem",
+            color: NAVY,
+            textAlign: "center",
+            marginBottom: "1.5rem",
           }}
         >
-          <div
-            style={{
-              flex: "1 1 280px",
-              position: "relative",
-              minHeight: "200px",
-              backgroundColor: OFFWHITE,
-              borderRadius: "12px",
-              overflow: "hidden",
-            }}
-          >
-            <Image
-              src="/baleno.png"
-              alt="Maruti Baleno"
-              fill
-              style={{ objectFit: "cover" }}
-              sizes="(max-width: 768px) 100vw, 400px"
-            />
-          </div>
+          Loading cars…
+        </p>
+      )}
 
-          <div style={{ flex: "1 1 280px", display: "flex", flexDirection: "column" }}>
-            <h1
-              style={{
-                fontFamily: "'Outfit', sans-serif",
-                fontSize: "1.5rem",
-                fontWeight: 700,
-                color: NAVY,
-                marginBottom: "0.5rem",
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Maruti Baleno
-            </h1>
+      {carsError && (
+        <div
+          style={{
+            ...cardShadow,
+            backgroundColor: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.5rem",
+            color: "#dc2626",
+            fontSize: "0.875rem",
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          Failed to load cars: {carsError}
+        </div>
+      )}
 
-            <p
-              style={{
-                fontSize: "0.875rem",
-                color: "#6b7280",
-                marginBottom: "1rem",
-              }}
-            >
-              Petrol · Manual · 5 Seater
-            </p>
+      {!carsLoading && !carsError && cars.length === 0 && (
+        <p
+          style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "0.9375rem",
+            color: "#6b7280",
+            textAlign: "center",
+            marginBottom: "1.5rem",
+          }}
+        >
+          No cars available at the moment.
+        </p>
+      )}
 
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        {cars.map((car) => {
+          const specPills = [
+            capitalize(car.fuel),
+            capitalize(car.transmission),
+            `${car.seats} Seater`,
+            capitalize(car.category),
+          ];
+          const isSelected = selectedCar?.id === car.id;
+
+          return (
             <div
+              key={car.id}
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.5rem",
-                marginBottom: "1.25rem",
+                ...cardShadow,
+                backgroundColor: WHITE,
+                borderRadius: "16px",
+                overflow: "hidden",
               }}
             >
-              {["Petrol", "Manual", "5 Seater"].map((badge) => (
-                <span
-                  key={badge}
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: NAVY,
-                    backgroundColor: OFFWHITE,
-                    padding: "0.35rem 0.75rem",
-                    borderRadius: "999px",
-                    border: "1px solid #e2e8f0",
-                  }}
-                >
-                  {badge}
-                </span>
-              ))}
-            </div>
-
-            <p style={{ marginBottom: "1.25rem" }}>
-              <span
+              <div
                 style={{
-                  fontFamily: "'Outfit', sans-serif",
-                  fontSize: "1.75rem",
-                  fontWeight: 700,
-                  color: NAVY,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "1.5rem",
+                  padding: "1.5rem",
                 }}
               >
-                ₹{BASE_RATE_PER_DAY.toLocaleString("en-IN")}
-              </span>
-              <span style={{ fontSize: "0.875rem", color: "#6b7280", marginLeft: "0.25rem" }}>
-                /day
-              </span>
-            </p>
+                <div
+                  style={{
+                    flex: "1 1 280px",
+                    position: "relative",
+                    minHeight: "200px",
+                    backgroundColor: OFFWHITE,
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                  }}
+                >
+                  {car.image_urls[0] ? (
+                    <img
+                      src={car.image_urls[0]}
+                      alt={car.name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        minHeight: "200px",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        minHeight: "200px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#9ca3af",
+                        fontFamily: "'DM Sans', sans-serif",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      No image available
+                    </div>
+                  )}
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setShowBookingForm(true)}
-              onMouseEnter={() => setSelectHover(true)}
-              onMouseLeave={() => setSelectHover(false)}
-              style={{
-                marginTop: "auto",
-                alignSelf: "flex-start",
-                padding: "0.75rem 1.75rem",
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                fontFamily: "'DM Sans', sans-serif",
-                color: WHITE,
-                backgroundColor: selectHover ? NAVY_LIGHT : NAVY,
-                border: "none",
-                borderRadius: "10px",
-                cursor: "pointer",
-                transition: "background-color 0.2s ease",
-                boxShadow: "0 4px 14px rgba(26, 31, 94, 0.25)",
-              }}
-            >
-              Select This Car
-            </button>
-          </div>
-        </div>
+                <div
+                  style={{
+                    flex: "1 1 280px",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <h2
+                    style={{
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "22px",
+                      fontWeight: 700,
+                      color: NAVY,
+                      marginBottom: "0.75rem",
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    {car.name}
+                  </h2>
 
-        {showBookingForm && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                      marginBottom: "1.25rem",
+                    }}
+                  >
+                    {specPills.map((badge) => (
+                      <span
+                        key={badge}
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: NAVY,
+                          backgroundColor: OFFWHITE,
+                          padding: "0.35rem 0.75rem",
+                          borderRadius: "999px",
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p style={{ marginBottom: "1.25rem" }}>
+                    <span
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: "28px",
+                        fontWeight: 700,
+                        color: NAVY,
+                      }}
+                    >
+                      {formatRupee(car.price_per_day)}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.875rem",
+                        color: "#6b7280",
+                        marginLeft: "0.25rem",
+                      }}
+                    >
+                      /day
+                    </span>
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCar(car);
+                      setShowBookingForm(true);
+                    }}
+                    onMouseEnter={() => setSelectHover(true)}
+                    onMouseLeave={() => setSelectHover(false)}
+                    style={{
+                      marginTop: "auto",
+                      alignSelf: "flex-start",
+                      padding: "0.75rem 1.75rem",
+                      fontSize: "0.9375rem",
+                      fontWeight: 600,
+                      fontFamily: "'DM Sans', sans-serif",
+                      color: WHITE,
+                      backgroundColor: selectHover ? NAVY_LIGHT : NAVY,
+                      border: "none",
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      transition: "background-color 0.2s ease",
+                      boxShadow: "0 4px 14px rgba(26, 31, 94, 0.25)",
+                    }}
+                  >
+                    Select This Car
+                  </button>
+                </div>
+              </div>
+
+              {isSelected && showBookingForm && (
           <form
             onSubmit={handleSubmit}
             style={{
@@ -728,6 +862,7 @@ function CarsPageContent() {
                   breakdown={priceBreakdown}
                   pickupDatetime={pickupDatetime}
                   returnDatetime={returnDatetime}
+                  pricePerDay={selectedCar.price_per_day}
                 />
               ) : (
                 <div style={{ flex: "1 1 280px", minWidth: "240px" }}>
@@ -795,8 +930,23 @@ function CarsPageContent() {
               </div>
             </div>
           </form>
-        )}
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      <p
+        style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: "13px",
+          color: "#888888",
+          textAlign: "center",
+          marginTop: "1.5rem",
+        }}
+      >
+        Minimum booking duration is 3 days.
+      </p>
     </div>
   );
 }
