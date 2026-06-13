@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   LOCATIONS,
   calculatePrice,
+  getBillableDays,
   validateBooking,
   type PriceBreakdown,
   type PriceMetadata,
@@ -328,7 +329,10 @@ function CarsPageContent() {
 
   const now = toDatetimeLocal(new Date());
   const firstName = fullName.trim().split(/\s+/)[0] || "there";
-  const durationDays = priceBreakdown?.baseDays ?? 0;
+  const durationDays = useMemo(() => {
+    if (!hasValidDates) return null;
+    return getBillableDays(pickupDatetime, returnDatetime);
+  }, [hasValidDates, pickupDatetime, returnDatetime]);
   const submitDisabled =
     submitting || !validation.valid || !priceBreakdown || !selectedCar;
 
@@ -552,7 +556,7 @@ function CarsPageContent() {
               color: NAVY,
             }}
           >
-            {hasValidDates
+            {durationDays !== null
               ? `${durationDays} day${durationDays === 1 ? "" : "s"}`
               : "—"}
           </p>

@@ -74,6 +74,13 @@ function getBaseDays(pickupDatetime: Date, returnDatetime: Date): number {
   return Math.max(MINIMUM_DAYS, diffDays);
 }
 
+export function getBillableDays(
+  pickupDatetime: Date,
+  returnDatetime: Date
+): number {
+  return getBaseDays(pickupDatetime, returnDatetime);
+}
+
 function getLocationCharge(location: string): number {
   return LOCATION_CHARGES[location] ?? 0;
 }
