@@ -4,9 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LOCATIONS, validateBooking } from "@/lib/pricing";
 
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1580584126903-c17d4184de1e?auto=format&fit=crop&w=1920&q=80";
-
 const NAVY = "#1a1f5e";
 const WHITE = "#ffffff";
 const OFFWHITE = "#f4f6fb";
@@ -140,19 +137,34 @@ export default function Home() {
       style={{
         position: "relative",
         width: "100%",
-        minHeight: "calc(100vh - 72px)",
+        minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundImage: `linear-gradient(rgba(26, 31, 94, 0.78), rgba(26, 31, 94, 0.85)), url(${HERO_IMAGE})`,
+        backgroundImage: "url('/background.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
         padding: "4rem 1.5rem",
+        paddingTop: "calc(72px + 4rem)",
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(26, 31, 94, 0.55)",
+          zIndex: 0,
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
           width: "100%",
           maxWidth: "960px",
           textAlign: "center",

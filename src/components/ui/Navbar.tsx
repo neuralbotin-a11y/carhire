@@ -7,7 +7,7 @@ const NAVY = "#1a1f5e";
 const WHITE = "#ffffff";
 
 const navLinkStyle: React.CSSProperties = {
-  color: NAVY,
+  color: WHITE,
   textDecoration: "none",
   fontSize: "0.875rem",
   fontWeight: 500,
@@ -48,11 +48,15 @@ export default function Navbar() {
   return (
     <nav
       style={{
-        backgroundColor: WHITE,
-        boxShadow: "0 2px 16px 0 rgba(26,31,94,0.08)",
-        position: "sticky",
+        backgroundColor: "rgba(255, 255, 255, 0.12)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.18)",
+        position: "fixed",
         top: 0,
-        zIndex: 50,
+        left: 0,
+        right: 0,
+        zIndex: 100,
         width: "100%",
       }}
     >
@@ -91,7 +95,7 @@ export default function Navbar() {
               width: "2.5rem",
               height: "2.5rem",
               fontSize: "1.5rem",
-              color: NAVY,
+              color: WHITE,
               backgroundColor: "transparent",
               border: "none",
               cursor: "pointer",
@@ -136,9 +140,10 @@ export default function Navbar() {
         <div
           style={{
             width: "100%",
-            backgroundColor: WHITE,
-            borderTop: "1px solid #e2e8f0",
-            boxShadow: "0 8px 24px rgba(26, 31, 94, 0.08)",
+            backgroundColor: "rgba(255, 255, 255, 0.12)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderTop: "1px solid rgba(255, 255, 255, 0.18)",
             padding: "1rem 1.5rem 1.25rem",
             display: "flex",
             flexDirection: "column",
