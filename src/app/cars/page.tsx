@@ -330,9 +330,9 @@ function CarsPageContent() {
   const now = toDatetimeLocal(new Date());
   const firstName = fullName.trim().split(/\s+/)[0] || "there";
   const durationDays = useMemo(() => {
-    if (!hasValidDates) return null;
+    if (!hasValidDates || !validation.valid) return null;
     return getBillableDays(pickupDatetime, returnDatetime);
-  }, [hasValidDates, pickupDatetime, returnDatetime]);
+  }, [hasValidDates, validation.valid, pickupDatetime, returnDatetime]);
   const submitDisabled =
     submitting || !validation.valid || !priceBreakdown || !selectedCar;
 
