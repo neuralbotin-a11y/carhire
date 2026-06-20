@@ -54,6 +54,7 @@ const datetimeFieldStyle: React.CSSProperties = {
   ...fieldStyle,
   display: "block",
   minWidth: 0,
+  minHeight: "48px",
   boxSizing: "border-box",
   WebkitAppearance: "none",
   appearance: "none",
