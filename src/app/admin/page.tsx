@@ -2,7 +2,15 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { bookingService } from "@/services/booking.service";
-import type { BookingFull, BookingStatus as SupabaseBookingStatus } from "@/lib/types";
+import {
+  confirmBooking,
+  activateBooking,
+  completeBooking,
+  cancelBooking,
+  revertToPending,
+  type CancellationActor,
+} from "@/services/bookingUpdateService";
+import type { BookingFull } from "@/lib/types";
 import type { PriceMetadata } from "@/lib/pricing";
 
 const NAVY = "#1a1f5e";
@@ -29,12 +37,14 @@ type Booking = {
   dropoffLocation: string;
   pickupDate: string;
   pickupDatetime: string;
+  returnDatetime: string;
   returnDate: string;
   duration: string;
   carName: string;
   totalPrice: number;
   securityDeposit: number | null;
   metadata: PriceMetadata | null;
+  rawMetadata: Record<string, unknown>;
   status: BookingStatus;
   adminNote: string;
 };
@@ -67,11 +77,8 @@ type ChangeLogEntry = {
 };
 
 type StatusModalState = {
-  bookingId: string;
-  customerName: string;
-  oldStatus: BookingStatus;
+  booking: Booking;
   newStatus: BookingStatus;
-  note: string;
 };
 
 const DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
@@ -107,8 +114,19 @@ function mapSupabaseStatus(status: string): BookingStatus {
   return labels[status] ?? "Pending";
 }
 
-function toSupabaseStatus(status: BookingStatus): SupabaseBookingStatus {
-  return status.toLowerCase() as SupabaseBookingStatus;
+function toServiceStatus(status: BookingStatus): string {
+  return status.toLowerCase();
+}
+
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDatetimeLocalValue(value: string): string {
+  return new Date(value).toISOString();
 }
 
 function mapBookingFull(row: BookingFull): Booking {
@@ -121,12 +139,14 @@ function mapBookingFull(row: BookingFull): Booking {
     dropoffLocation: row.dropoff_location ?? row.pickup_location,
     pickupDate: formatBookingDatetime(row.pickup_datetime),
     pickupDatetime: row.pickup_datetime,
+    returnDatetime: row.return_datetime,
     returnDate: formatBookingDatetime(row.return_datetime),
     duration: `${row.duration_days} days`,
     carName: row.car_name,
     totalPrice: row.total_price,
     securityDeposit: row.security_deposit ?? null,
     metadata: parseMetadata(row.metadata),
+    rawMetadata: row.metadata ?? {},
     status: mapSupabaseStatus(row.status),
     adminNote: row.admin_note ?? "",
   };
@@ -458,133 +478,535 @@ function formatLogTime(date: Date) {
   });
 }
 
-function StatusChangeModal({
-  modal,
-  onNoteChange,
-  onConfirm,
+const modalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.5)",
+  zIndex: 1000,
+  overflowY: "auto",
+  padding: "16px",
+  display: "flex",
+};
+
+const modalCardStyle: React.CSSProperties = {
+  backgroundColor: WHITE,
+  borderRadius: "16px",
+  padding: "24px",
+  maxWidth: "520px",
+  width: "100%",
+  margin: "0 auto",
+  position: "relative",
+  marginTop: "auto",
+  marginBottom: "auto",
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  fontFamily: "'DM Sans', sans-serif",
+  color: "#444444",
+  fontSize: "13px",
+  textTransform: "uppercase",
+  letterSpacing: "0.5px",
+  display: "block",
+  marginBottom: "6px",
+};
+
+const modalInputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  padding: "10px 14px",
+  fontFamily: "'DM Sans', sans-serif",
+  fontSize: "15px",
+  marginBottom: "16px",
+};
+
+const modalPrimaryBtnStyle: React.CSSProperties = {
+  width: "100%",
+  backgroundColor: NAVY,
+  color: WHITE,
+  fontFamily: "'Outfit', sans-serif",
+  fontSize: "16px",
+  borderRadius: "8px",
+  padding: "14px",
+  cursor: "pointer",
+  border: "none",
+};
+
+const modalCancelBtnStyle: React.CSSProperties = {
+  width: "100%",
+  backgroundColor: WHITE,
+  border: `1px solid ${NAVY}`,
+  color: NAVY,
+  fontFamily: "'Outfit', sans-serif",
+  fontSize: "16px",
+  borderRadius: "8px",
+  padding: "14px",
+  marginTop: "8px",
+  cursor: "pointer",
+};
+
+const modalErrorStyle: React.CSSProperties = {
+  fontFamily: "'DM Sans', sans-serif",
+  color: "#dc2626",
+  fontSize: "13px",
+  marginTop: "-12px",
+  marginBottom: "12px",
+};
+
+const MODAL_TITLES: Record<BookingStatus, string> = {
+  Pending: "Revert to Pending",
+  Confirmed: "Confirm Booking",
+  Active: "Mark as Picked Up",
+  Completed: "Complete Booking",
+  Cancelled: "Cancel Booking",
+};
+
+function StatusUpdateModal({
+  booking,
+  newStatus,
+  onSuccess,
   onCancel,
 }: {
-  modal: StatusModalState;
-  onNoteChange: (note: string) => void;
-  onConfirm: () => void;
+  booking: Booking;
+  newStatus: BookingStatus;
+  onSuccess: (updates: Partial<Booking>) => void;
   onCancel: () => void;
 }) {
-  const [confirmHover, setConfirmHover] = useState(false);
-  const noteTrimmed = modal.note.trim();
-  const canConfirm = noteTrimmed.length > 0;
+  const deposit =
+    booking.metadata?.securityDeposit ?? booking.securityDeposit ?? 0;
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [assignedRegistration, setAssignedRegistration] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("0");
+  const [promoCode, setPromoCode] = useState("");
+  const [adminNote, setAdminNote] = useState("");
+
+  const [pickupConfirmedAt, setPickupConfirmedAt] = useState(
+    toDatetimeLocalValue(booking.pickupDatetime)
+  );
+  const [specialRequests, setSpecialRequests] = useState("");
+
+  const [returnConfirmedAt, setReturnConfirmedAt] = useState(
+    toDatetimeLocalValue(booking.returnDatetime)
+  );
+  const [finalAmount, setFinalAmount] = useState(String(booking.totalPrice));
+  const [completeDiscount, setCompleteDiscount] = useState("0");
+  const [penaltyAmount, setPenaltyAmount] = useState("0");
+  const [washingDeduction, setWashingDeduction] = useState("0");
+  const [completeRefundAmount, setCompleteRefundAmount] = useState("0");
+
+  const [cancelledBy, setCancelledBy] = useState<CancellationActor>("admin");
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancelRefundAmount, setCancelRefundAmount] = useState("0");
+
+  const netRefund =
+    deposit -
+    (Number(penaltyAmount) || 0) -
+    (Number(washingDeduction) || 0);
+
+  async function handleSave() {
+    setError("");
+
+    const previousStatus = toServiceStatus(booking.status);
+    const common = {
+      bookingId: booking.id,
+      customerName: booking.name,
+      adminEmail: ADMIN_EMAIL,
+      previousStatus,
+    };
+
+    try {
+      setSaving(true);
+
+      if (newStatus === "Confirmed") {
+        if (!assignedRegistration.trim()) {
+          setError("Registration number is required.");
+          return;
+        }
+        if (!adminNote.trim()) {
+          setError("Admin note is required.");
+          return;
+        }
+        await confirmBooking({
+          ...common,
+          assignedRegistration: assignedRegistration.trim(),
+          discountAmount: Number(discountAmount) || 0,
+          promoCode: promoCode.trim() || undefined,
+          adminNote: adminNote.trim(),
+        });
+        onSuccess({ status: "Confirmed", adminNote: adminNote.trim() });
+      } else if (newStatus === "Active") {
+        if (!pickupConfirmedAt) {
+          setError("Actual pickup date and time is required.");
+          return;
+        }
+        if (!adminNote.trim()) {
+          setError("Admin note is required.");
+          return;
+        }
+        await activateBooking({
+          ...common,
+          pickupConfirmedAt: fromDatetimeLocalValue(pickupConfirmedAt),
+          specialRequests: specialRequests.trim() || undefined,
+          adminNote: adminNote.trim(),
+        });
+        onSuccess({ status: "Active", adminNote: adminNote.trim() });
+      } else if (newStatus === "Completed") {
+        if (!returnConfirmedAt) {
+          setError("Actual return date and time is required.");
+          return;
+        }
+        if (!finalAmount.trim() || Number.isNaN(Number(finalAmount))) {
+          setError("Final amount charged is required.");
+          return;
+        }
+        if (!adminNote.trim()) {
+          setError("Admin note is required.");
+          return;
+        }
+        await completeBooking({
+          ...common,
+          returnConfirmedAt: fromDatetimeLocalValue(returnConfirmedAt),
+          finalAmount: Number(finalAmount),
+          discountAmount: Number(completeDiscount) || 0,
+          penaltyAmount: Number(penaltyAmount) || 0,
+          washingDeduction: Number(washingDeduction) || 0,
+          refundAmount: Number(completeRefundAmount) || 0,
+          adminNote: adminNote.trim(),
+          existingMetadata: booking.rawMetadata,
+        });
+        onSuccess({
+          status: "Completed",
+          adminNote: adminNote.trim(),
+          totalPrice: Number(finalAmount),
+        });
+      } else if (newStatus === "Cancelled") {
+        if (!cancellationReason.trim()) {
+          setError("Cancellation reason is required.");
+          return;
+        }
+        if (!adminNote.trim()) {
+          setError("Admin note is required.");
+          return;
+        }
+        await cancelBooking({
+          ...common,
+          cancelledBy,
+          cancellationReason: cancellationReason.trim(),
+          refundAmount: Number(cancelRefundAmount) || 0,
+          adminNote: adminNote.trim(),
+          existingMetadata: booking.rawMetadata,
+        });
+        onSuccess({ status: "Cancelled", adminNote: adminNote.trim() });
+      } else if (newStatus === "Pending") {
+        if (!adminNote.trim()) {
+          setError("Reason is required.");
+          return;
+        }
+        await revertToPending({
+          ...common,
+          adminNote: adminNote.trim(),
+        });
+        onSuccess({ status: "Pending", adminNote: adminNote.trim() });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function renderFields() {
+    switch (newStatus) {
+      case "Confirmed":
+        return (
+          <>
+            <label style={modalLabelStyle}>Registration Number</label>
+            <input
+              type="text"
+              value={assignedRegistration}
+              onChange={(e) => setAssignedRegistration(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Discount Amount ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={discountAmount}
+              onChange={(e) => setDiscountAmount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Promo Code</label>
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Admin Note</label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+          </>
+        );
+      case "Active":
+        return (
+          <>
+            <label style={modalLabelStyle}>Actual Pickup Date &amp; Time</label>
+            <input
+              type="datetime-local"
+              value={pickupConfirmedAt}
+              onChange={(e) => setPickupConfirmedAt(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Special Requests</label>
+            <textarea
+              value={specialRequests}
+              onChange={(e) => setSpecialRequests(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Admin Note</label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+          </>
+        );
+      case "Completed":
+        return (
+          <>
+            <label style={modalLabelStyle}>Actual Return Date &amp; Time</label>
+            <input
+              type="datetime-local"
+              value={returnConfirmedAt}
+              onChange={(e) => setReturnConfirmedAt(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Final Amount Charged ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={finalAmount}
+              onChange={(e) => setFinalAmount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Discount Applied ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={completeDiscount}
+              onChange={(e) => setCompleteDiscount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Penalty Amount ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={penaltyAmount}
+              onChange={(e) => setPenaltyAmount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Washing Deduction ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={washingDeduction}
+              onChange={(e) => setWashingDeduction(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Refund Amount ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={completeRefundAmount}
+              onChange={(e) => setCompleteRefundAmount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <p
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "14px",
+                marginTop: "-8px",
+                marginBottom: "16px",
+                color: netRefund >= 0 ? "#16a34a" : "#dc2626",
+              }}
+            >
+              Net refund to customer: {formatRupee(netRefund)}
+            </p>
+            <label style={modalLabelStyle}>Admin Note</label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+          </>
+        );
+      case "Cancelled":
+        return (
+          <>
+            <label style={modalLabelStyle}>Cancelled By</label>
+            <select
+              value={cancelledBy}
+              onChange={(e) =>
+                setCancelledBy(e.target.value as CancellationActor)
+              }
+              style={modalInputStyle}
+              disabled={saving}
+            >
+              <option value="customer">Customer</option>
+              <option value="admin">Admin</option>
+              <option value="system">System</option>
+            </select>
+            <label style={modalLabelStyle}>Cancellation Reason</label>
+            <textarea
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Refund Amount ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={cancelRefundAmount}
+              onChange={(e) => setCancelRefundAmount(e.target.value)}
+              style={modalInputStyle}
+              disabled={saving}
+            />
+            <label style={modalLabelStyle}>Admin Note</label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={3}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+          </>
+        );
+      case "Pending":
+        return (
+          <>
+            <label style={modalLabelStyle}>Reason</label>
+            <textarea
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={4}
+              style={{ ...modalInputStyle, resize: "vertical" }}
+              disabled={saving}
+            />
+          </>
+        );
+    }
+  }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(26, 31, 94, 0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1.5rem",
-        zIndex: 1000,
-      }}
-      onClick={onCancel}
-    >
+    <div style={modalOverlayStyle} onClick={onCancel}>
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="status-modal-title"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: "480px",
-          backgroundColor: WHITE,
-          borderRadius: "14px",
-          padding: "1.5rem",
-          boxShadow: "0 16px 48px rgba(26, 31, 94, 0.2)",
-        }}
+        style={modalCardStyle}
       >
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          style={{
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            color: NAVY,
+            fontSize: "24px",
+            cursor: saving ? "not-allowed" : "pointer",
+            background: "none",
+            border: "none",
+            lineHeight: 1,
+            padding: 0,
+          }}
+          aria-label="Close"
+        >
+          ×
+        </button>
+
         <h3
-          id="status-modal-title"
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.125rem",
+            fontSize: "20px",
             fontWeight: 700,
             color: NAVY,
-            marginBottom: "0.5rem",
+            marginBottom: "4px",
+            paddingRight: "32px",
           }}
         >
-          Confirm status change
+          {MODAL_TITLES[newStatus]}
         </h3>
-        <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1.25rem" }}>
-          Changing status for <strong style={{ color: NAVY }}>{modal.customerName}</strong>{" "}
-          from <strong>{modal.oldStatus}</strong> to <strong>{modal.newStatus}</strong>.
-          A note is required before saving.
+        <p
+          style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "14px",
+            color: "#666666",
+            marginBottom: "20px",
+          }}
+        >
+          {booking.name}
         </p>
 
-        <label htmlFor="status-change-note" style={labelStyle}>
-          Note (required)
-        </label>
-        <textarea
-          id="status-change-note"
-          value={modal.note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          rows={4}
-          placeholder="e.g. Customer confirmed via phone call"
-          style={{
-            ...fieldStyle,
-            resize: "vertical",
-            marginBottom: "1.25rem",
-          }}
-        />
+        {renderFields()}
 
-        <div
+        {error && <p style={modalErrorStyle}>{error}</p>}
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
           style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "0.75rem",
+            ...modalPrimaryBtnStyle,
+            opacity: saving ? 0.7 : 1,
+            cursor: saving ? "not-allowed" : "pointer",
           }}
         >
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: "0.6rem 1.25rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              fontFamily: "'DM Sans', sans-serif",
-              color: NAVY,
-              backgroundColor: WHITE,
-              border: `1px solid ${NAVY}`,
-              borderRadius: "8px",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canConfirm}
-            onClick={onConfirm}
-            onMouseEnter={() => setConfirmHover(true)}
-            onMouseLeave={() => setConfirmHover(false)}
-            style={{
-              padding: "0.6rem 1.25rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              fontFamily: "'DM Sans', sans-serif",
-              color: WHITE,
-              backgroundColor: canConfirm
-                ? confirmHover
-                  ? "#2d3494"
-                  : NAVY
-                : "#9ca3af",
-              border: "none",
-              borderRadius: "8px",
-              cursor: canConfirm ? "pointer" : "not-allowed",
-              transition: "background-color 0.2s ease",
-            }}
-          >
-            Confirm
-          </button>
-        </div>
+          {saving ? "Saving..." : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          style={{
+            ...modalCancelBtnStyle,
+            cursor: saving ? "not-allowed" : "pointer",
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );
@@ -595,7 +1017,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
-  const [updateError, setUpdateError] = useState("");
   const [changeLogs, setChangeLogs] = useState<ChangeLogEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusModal, setStatusModal] = useState<StatusModalState | null>(null);
@@ -691,45 +1112,39 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   function handleStatusSelect(id: string, newStatus: BookingStatus) {
     const booking = bookings.find((b) => b.id === id);
     if (!booking || booking.status === newStatus) return;
-    setStatusModal({
-      bookingId: id,
-      customerName: booking.name,
-      oldStatus: booking.status,
-      newStatus,
-      note: "",
-    });
+    setStatusModal({ booking, newStatus });
   }
 
-  async function handleStatusConfirm() {
-    if (!statusModal || !statusModal.note.trim()) return;
+  function handleStatusModalSuccess(updates: Partial<Booking>) {
+    if (!statusModal) return;
 
-    setUpdateError("");
-    const { error } = await bookingService.updateStatus(
-      statusModal.bookingId,
-      toSupabaseStatus(statusModal.newStatus),
-      statusModal.note.trim(),
-      ADMIN_EMAIL
+    const { booking, newStatus } = statusModal;
+
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === booking.id ? { ...b, ...updates } : b
+      )
     );
 
-    if (error) {
-      setUpdateError(error);
-      return;
-    }
+    setChangeLogs((prev) => [
+      {
+        timestamp: new Date(),
+        admin_email: ADMIN_EMAIL,
+        booking_id: booking.id,
+        customer_name: booking.name,
+        field_changed: "status",
+        old_value: booking.status,
+        new_value: newStatus,
+        note: updates.adminNote ?? "",
+      },
+      ...prev,
+    ]);
 
-    const logEntry: ChangeLogEntry = {
-      timestamp: new Date(),
-      admin_email: ADMIN_EMAIL,
-      booking_id: statusModal.bookingId,
-      customer_name: statusModal.customerName,
-      field_changed: "status",
-      old_value: statusModal.oldStatus,
-      new_value: statusModal.newStatus,
-      note: statusModal.note.trim(),
-    };
-
-    setChangeLogs((prev) => [logEntry, ...prev]);
     setStatusModal(null);
-    await fetchBookings();
+  }
+
+  function handleStatusModalCancel() {
+    setStatusModal(null);
   }
 
   function handleNoteChange(id: string, value: string) {
@@ -741,13 +1156,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: OFFWHITE }}>
       {statusModal && (
-        <StatusChangeModal
-          modal={statusModal}
-          onNoteChange={(note) =>
-            setStatusModal((prev) => (prev ? { ...prev, note } : null))
-          }
-          onConfirm={handleStatusConfirm}
-          onCancel={() => setStatusModal(null)}
+        <StatusUpdateModal
+          booking={statusModal.booking}
+          newStatus={statusModal.newStatus}
+          onSuccess={handleStatusModalSuccess}
+          onCancel={handleStatusModalCancel}
         />
       )}
 
@@ -1023,24 +1436,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             }}
           >
             {fetchError}
-          </p>
-        )}
-
-        {updateError && (
-          <p
-            style={{
-              maxWidth: "860px",
-              margin: "0 auto 1rem",
-              fontSize: "0.875rem",
-              color: "#b91c1c",
-              backgroundColor: "#fee2e2",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              padding: "0.75rem 1rem",
-              boxSizing: "border-box",
-            }}
-          >
-            {updateError}
           </p>
         )}
 
