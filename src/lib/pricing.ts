@@ -17,21 +17,41 @@ const MINIMUM_DURATION_HOURS = 72;
 const MINIMUM_ADVANCE_HOURS = 24;
 
 export const LOCATIONS: string[] = [
-  "Dabolim Airport",
-  "Manohar Airport",
-  "Madgaon Railway Station",
-  "Vasco Da Gama Railway Station",
-  "Panjim",
   "Margao",
+  "Colva",
+  "Varca",
+  "Verna",
+  "Vasco",
+  "Margao Station",
+  "Margao Bus Stand",
+  "Vasco Railway Station",
+  "Karmali Railway Station",
+  "Panjim Bus Stand",
+  "Dabolim Int. Airport (GOI)",
+  "Manohar Int. Airport (GOX)",
+  "Mapusa",
+  "Calangute",
+  "Candolim",
+  "Baga",
 ];
 
 export const LOCATION_CHARGES: Record<string, number> = {
-  "Dabolim Airport": 500,
-  "Manohar Airport": 1300,
-  "Madgaon Railway Station": 0,
-  "Vasco Da Gama Railway Station": 500,
-  Panjim: 500,
-  Margao: 0,
+  "Margao": 0,
+  "Colva": 300,
+  "Varca": 300,
+  "Verna": 300,
+  "Vasco": 500,
+  "Margao Station": 100,
+  "Margao Bus Stand": 100,
+  "Vasco Railway Station": 500,
+  "Karmali Railway Station": 500,
+  "Panjim Bus Stand": 500,
+  "Dabolim Int. Airport (GOI)": 500,
+  "Manohar Int. Airport (GOX)": 1000,
+  "Mapusa": 500,
+  "Calangute": 500,
+  "Candolim": 500,
+  "Baga": 500,
 };
 
 export interface PriceBreakdown {
