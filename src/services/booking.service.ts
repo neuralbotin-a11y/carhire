@@ -7,6 +7,7 @@ import {
   ServiceResult,
   BOOKING_TRANSITIONS,
 } from '@/lib/types';
+import { sendBookingEmails } from '@/services/emailService';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -77,6 +78,25 @@ export const bookingService = {
       .single();
 
     if (error) return { data: null, error: error.message };
+
+    void sendBookingEmails({
+      bookingId: data.id,
+      carName: input.car_name,
+      customerName: input.customer_name.trim(),
+      customerEmail: input.customer_email.toLowerCase().trim(),
+      customerPhone: input.customer_phone.trim(),
+      pickupLocation: input.pickup_location,
+      dropoffLocation: input.different_dropoff && input.dropoff_location
+        ? input.dropoff_location
+        : input.pickup_location,
+      pickupDatetime: input.pickup_datetime,
+      returnDatetime: input.return_datetime,
+      durationDays: computeDurationDays(input.pickup_datetime, input.return_datetime),
+      pricePerDay: input.price_per_day,
+      totalPrice: input.total_price,
+      securityDeposit: input.metadata.securityDeposit,
+    });
+
     return { data, error: null };
   },
 

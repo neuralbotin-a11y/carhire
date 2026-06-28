@@ -1,173 +1,98 @@
-// ⚠️ SERVER-SIDE ONLY — never import this from a client component.
-// Sends transactional emails through the Brevo API using the secret BREVO_API_KEY.
-
-const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
-
-const SENDER = { name: 'SmartWheels', email: 'bookings@smartwheels.in' };
-const ADMIN_EMAIL = 'bookings@smartwheels.in';
-
-export interface BookingEmailData {
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  pickupLocation: string;
-  dropoffLocation: string;
-  pickupDatetime: string;
-  returnDatetime: string;
-  durationDays: number;
-  pricePerDay: number;
-  totalPrice: number;
-  securityDeposit: number;
-  carName: string;
-  bookingId: string;
+interface BookingEmailData {
+  bookingId: string
+  carName: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  pickupLocation: string
+  dropoffLocation: string
+  pickupDatetime: string
+  returnDatetime: string
+  durationDays: number
+  pricePerDay: number
+  totalPrice: number
+  securityDeposit: number
 }
-
-// ── Formatting helpers ───────────────────────────────────────
-
-function formatCurrency(amount: number): string {
-  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('en-IN', {
-    weekday: 'short',
-    day:     'numeric',
-    month:   'short',
-    year:    'numeric',
-    hour:    '2-digit',
-    minute:  '2-digit',
-    hour12:  true,
-  });
-}
-
-// ── Email templates ──────────────────────────────────────────
-
-function customerEmailHtml(b: BookingEmailData): string {
-  const ref = b.bookingId.slice(0, 8);
-  return `
-  <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.5;">
-    <h2 style="color: #1a1f5e;">Booking Confirmed</h2>
-    <p>Hi ${b.customerName},</p>
-    <p>Thank you for booking with <strong>SmartWheels Goa</strong>. Your reservation is confirmed. Here are your booking details:</p>
-
-    <p style="margin: 16px 0;"><strong>Booking reference:</strong> ${ref}</p>
-
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 6px 0;"><strong>Car</strong></td><td style="padding: 6px 0;">${b.carName}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Pickup location</strong></td><td style="padding: 6px 0;">${b.pickupLocation}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Dropoff location</strong></td><td style="padding: 6px 0;">${b.dropoffLocation}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Pickup</strong></td><td style="padding: 6px 0;">${formatDateTime(b.pickupDatetime)}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Return</strong></td><td style="padding: 6px 0;">${formatDateTime(b.returnDatetime)}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Duration</strong></td><td style="padding: 6px 0;">${b.durationDays} day${b.durationDays === 1 ? '' : 's'}</td></tr>
-    </table>
-
-    <h3 style="color: #1a1f5e; margin-top: 24px;">Pricing</h3>
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 6px 0;"><strong>Price per day</strong></td><td style="padding: 6px 0;">${formatCurrency(b.pricePerDay)}</td></tr>
-      <tr><td style="padding: 6px 0;"><strong>Security deposit</strong></td><td style="padding: 6px 0;">${formatCurrency(b.securityDeposit)} <span style="color: #777; font-size: 13px;">(Refundable on return)</span></td></tr>
-      <tr><td style="padding: 6px 0; border-top: 1px solid #ddd;"><strong>Total amount payable</strong></td><td style="padding: 6px 0; border-top: 1px solid #ddd;"><strong>${formatCurrency(b.totalPrice)}</strong></td></tr>
-    </table>
-
-    <p style="margin-top: 24px;">Need to reach us?<br/>
-      <strong>+91 777 405 6566</strong> &nbsp;|&nbsp; <strong>bookings@smartwheels.in</strong>
-    </p>
-
-    <p style="color: #777; font-size: 13px; margin-top: 24px;">SmartWheels Goa — Drive Smart.</p>
-  </div>`;
-}
-
-function adminEmailHtml(b: BookingEmailData): string {
-  const ref = b.bookingId.slice(0, 8);
-  return `
-  <div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; color: #111; line-height: 1.5;">
-    <h2>New Booking Received</h2>
-    <p><strong>Booking reference:</strong> ${ref} (${b.bookingId})</p>
-
-    <h3>Customer</h3>
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 4px 0;"><strong>Name</strong></td><td style="padding: 4px 0;">${b.customerName}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Email</strong></td><td style="padding: 4px 0;">${b.customerEmail}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Phone</strong></td><td style="padding: 4px 0;">${b.customerPhone}</td></tr>
-    </table>
-
-    <h3>Trip</h3>
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 4px 0;"><strong>Car</strong></td><td style="padding: 4px 0;">${b.carName}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Pickup location</strong></td><td style="padding: 4px 0;">${b.pickupLocation}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Dropoff location</strong></td><td style="padding: 4px 0;">${b.dropoffLocation}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Pickup</strong></td><td style="padding: 4px 0;">${formatDateTime(b.pickupDatetime)}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Return</strong></td><td style="padding: 4px 0;">${formatDateTime(b.returnDatetime)}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Duration</strong></td><td style="padding: 4px 0;">${b.durationDays} day${b.durationDays === 1 ? '' : 's'}</td></tr>
-    </table>
-
-    <h3>Pricing</h3>
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 4px 0;"><strong>Price per day</strong></td><td style="padding: 4px 0;">${formatCurrency(b.pricePerDay)}</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Security deposit</strong></td><td style="padding: 4px 0;">${formatCurrency(b.securityDeposit)} (Refundable on return)</td></tr>
-      <tr><td style="padding: 4px 0;"><strong>Total amount payable</strong></td><td style="padding: 4px 0;"><strong>${formatCurrency(b.totalPrice)}</strong></td></tr>
-    </table>
-  </div>`;
-}
-
-// ── Brevo API ────────────────────────────────────────────────
-
-interface BrevoPayload {
-  sender: { name: string; email: string };
-  to: { email: string; name?: string }[];
-  subject: string;
-  htmlContent: string;
-}
-
-async function sendViaBrevo(payload: BrevoPayload, label: string): Promise<void> {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) {
-    console.error(`[emailService] BREVO_API_KEY is not set — skipping ${label} email.`);
-    return;
-  }
-
-  const res = await fetch(BREVO_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'api-key':      apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '<unreadable body>');
-    console.error(
-      `[emailService] Failed to send ${label} email. Status ${res.status}: ${body}`,
-    );
-  }
-}
-
-// ── Public API ───────────────────────────────────────────────
 
 export async function sendBookingEmails(booking: BookingEmailData): Promise<void> {
   try {
-    const customerEmail: BrevoPayload = {
-      sender:  SENDER,
-      to:      [{ email: booking.customerEmail, name: booking.customerName }],
-      subject: 'Booking Confirmed – SmartWheels Goa',
-      htmlContent: customerEmailHtml(booking),
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      console.error('[emailService] BREVO_API_KEY is not set');
+      return;
+    }
+
+    const sender = { name: 'SmartWheels', email: 'bookings@smartwheels.in' };
+
+    const fmt = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+    const bookingRef = `AG-${String(booking.bookingId).slice(0, 8).toUpperCase()}`;
+
+    // Email 1: Customer confirmation
+    const customerHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a1f5e;">Booking Request Received</h2>
+        <p>Hi ${booking.customerName},</p>
+        <p>Thanks for choosing SmartWheels! Your booking request has been received and we'll confirm shortly via WhatsApp or email.</p>
+        <table style="width:100%; border-collapse: collapse; margin: 1.5rem 0;">
+          <tr><td style="padding: 8px 0; color: #6b7280;">Booking Ref</td><td style="padding: 8px 0; font-weight: bold; color: #1a1f5e;">${bookingRef}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Car</td><td style="padding: 8px 0;">${booking.carName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Pickup</td><td style="padding: 8px 0;">${booking.pickupLocation} — ${new Date(booking.pickupDatetime).toLocaleString('en-IN')}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Drop-off</td><td style="padding: 8px 0;">${booking.dropoffLocation} — ${new Date(booking.returnDatetime).toLocaleString('en-IN')}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Duration</td><td style="padding: 8px 0;">${booking.durationDays} days</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Rate</td><td style="padding: 8px 0;">${fmt(booking.pricePerDay)} / day</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Security Deposit</td><td style="padding: 8px 0;">${fmt(booking.securityDeposit)} (refundable on return)</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-weight: bold;">Total Payable</td><td style="padding: 8px 0; font-weight: bold; font-size: 1.1em; color: #1a1f5e;">${fmt(booking.totalPrice)}</td></tr>
+        </table>
+        <p style="color: #6b7280; font-size: 0.875rem;">Questions? Contact us at bookings@smartwheels.in or +91 777 405 6566</p>
+      </div>
+    `;
+
+    // Email 2: Admin notification
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a1f5e;">New Booking Request</h2>
+        <table style="width:100%; border-collapse: collapse;">
+          <tr><td style="padding: 8px 0; color: #6b7280;">Booking Ref</td><td style="padding: 8px 0; font-weight: bold;">${bookingRef}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Customer</td><td style="padding: 8px 0;">${booking.customerName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Phone</td><td style="padding: 8px 0;">${booking.customerPhone}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Email</td><td style="padding: 8px 0;">${booking.customerEmail}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Car</td><td style="padding: 8px 0;">${booking.carName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Pickup</td><td style="padding: 8px 0;">${booking.pickupLocation} — ${new Date(booking.pickupDatetime).toLocaleString('en-IN')}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Drop-off</td><td style="padding: 8px 0;">${booking.dropoffLocation} — ${new Date(booking.returnDatetime).toLocaleString('en-IN')}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Duration</td><td style="padding: 8px 0;">${booking.durationDays} days</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Total</td><td style="padding: 8px 0; font-weight: bold;">${fmt(booking.totalPrice)}</td></tr>
+        </table>
+      </div>
+    `;
+
+    const sendEmail = async (to: { email: string; name: string }, subject: string, html: string) => {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sender, to: [to], subject, htmlContent: html }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`[emailService] Brevo error (${res.status}):`, text);
+      }
     };
 
-    const adminEmail: BrevoPayload = {
-      sender:  SENDER,
-      to:      [{ email: ADMIN_EMAIL }],
-      subject: `New Booking – ${booking.customerName} – ${booking.carName}`,
-      htmlContent: adminEmailHtml(booking),
-    };
+    await sendEmail(
+      { email: booking.customerEmail, name: booking.customerName },
+      'Booking Confirmed – SmartWheels Goa',
+      customerHtml
+    );
 
-    await Promise.all([
-      sendViaBrevo(customerEmail, 'customer confirmation'),
-      sendViaBrevo(adminEmail, 'admin notification'),
-    ]);
+    await sendEmail(
+      { email: 'bookings@smartwheels.in', name: 'SmartWheels Admin' },
+      `New Booking – ${booking.customerName} – ${booking.carName}`,
+      adminHtml
+    );
+
   } catch (err) {
-    // Booking is already persisted in Supabase — never surface email failures.
-    console.error('[emailService] Unexpected error sending booking emails:', err);
+    console.error('[emailService] Unexpected error:', err);
   }
 }
