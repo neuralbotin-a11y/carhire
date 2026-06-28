@@ -12,6 +12,7 @@ import {
 } from "@/lib/pricing";
 import { bookingService } from "@/services/booking.service";
 import { getActiveCars, type CarModel } from "@/services/carService";
+import { sendBookingEmails } from "@/services/emailService";
 
 const NAVY = "#1a1f5e";
 const NAVY_LIGHT = "#2d3494";
@@ -344,7 +345,7 @@ function CarsPageContent() {
     setSubmitting(true);
     setSubmitError("");
 
-    const { error } = await bookingService.create({
+    const { data, error } = await bookingService.create({
       customer_name: fullName,
       customer_phone: phone,
       customer_email: email,
@@ -379,6 +380,21 @@ function CarsPageContent() {
     if (error) {
       setSubmitError(error);
     } else {
+      void sendBookingEmails({
+        bookingId: data?.id ?? "",
+        carName: selectedCar.name,
+        customerName: fullName,
+        customerEmail: email,
+        customerPhone: phone,
+        pickupLocation,
+        dropoffLocation,
+        pickupDatetime: pickup,
+        returnDatetime: returnDate,
+        durationDays: durationDays ?? priceBreakdown.baseDays,
+        pricePerDay: selectedCar.price_per_day,
+        totalPrice: priceBreakdown.totalPayable,
+        securityDeposit: priceBreakdown.securityDeposit,
+      });
       setSubmitted(true);
     }
 
